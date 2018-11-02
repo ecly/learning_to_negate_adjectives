@@ -1,9 +1,22 @@
+"""
+Logic for building the data using NLTK and the binary of Google's
+300 dimensional word2vec embeddings, trained on Google News data.
+
+The pre-trained embeddings can be downloaded here:
+https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
+"""
 import gensim
 from nltk.corpus import wordnet as wn
 
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
 
+
 class Adjective:
+    """
+    Class encapsulating an Adjective with its name,
+    embedding, hyponyms and antonyms as per WordNet.
+    """
+
     def __init__(self, name, embedding, hyponyms, antonyms):
         self.name = name
         self.embedding = embedding
@@ -11,7 +24,11 @@ class Adjective:
         self.hyponyms = hyponyms
 
     def __str__(self):
-        return "%s, %s, %s" % (self.name, self.antonyms, self.hyponyms)
+        return "Name: %s\nAntonyms: %s\nHyponyms: %s" % (
+            self.name,
+            self.antonyms,
+            self.hyponyms,
+        )
 
 
 def build_hyponym_groups():
@@ -50,8 +67,13 @@ def build_adjective_dict(model):
             word_name = word.name()
 
             if word_name not in word2antonyms:
-                embedding = []
-                word2antonyms[word_name] = Adjective(word_name, embedding, set(), set())
+                try:
+                    embedding = model.get_vector(word_name)
+                    word2antonyms[word_name] = Adjective(
+                        word_name, embedding, set(), set()
+                    )
+                except KeyError:
+                    continue
 
             adj = word2antonyms[word_name]
             for antonym in word.antonyms():
@@ -61,13 +83,15 @@ def build_adjective_dict(model):
 
     return word2antonyms
 
+
 def main():
     # Load the Google news pre-trained Word2Vec model
-    # model = gensim.models.KeyedVectors.load_word2vec_format(GOOGLE_NEWS_PATH, binary=True)
-
-    model = []
+    model = gensim.models.KeyedVectors.load_word2vec_format(
+        GOOGLE_NEWS_PATH, binary=True
+    )
     adj_dict = build_adjective_dict(model)
-    print(adj_dict["dry"].hyponyms)
+    print(adj_dict["dry"])
+
 
 if __name__ == "__main__":
     main()

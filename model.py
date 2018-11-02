@@ -1,8 +1,8 @@
-from statistics import mean
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 import torch
+
 
 def calc_centroid(matrix):
     """
