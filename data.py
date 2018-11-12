@@ -49,40 +49,53 @@ def build_hyponym_groups():
 
     return hyponym_groups
 
+def antonyms_for_synset(synset):
+    """Gets all antonyms for a given synset using its lemmas"""
+    antonyms = set()
+    for word in synset.lemmas():
+        for antonym in word.antonyms():
+            antonyms.add(antonym.name())
+
+    return antonyms
+
 
 def build_adjective_dict(model):
     """
     Build adjective dict using wordnet and the given
     model for adjective word embeddings
     """
-    word2antonyms = {}
+    word2adj = {}
     hyponym_groups = build_hyponym_groups()
 
     current_hyponyms = set()
+    current_antonyms = set()
     for synset in wn.all_synsets(wn.ADJ):
         if synset.pos() == "a":
             current_hyponyms = hyponym_groups[synset.name()]
+            current_antonyms = antonyms_for_synset(synset)
 
         for word in synset.lemmas():
             word_name = word.name()
 
-            if word_name not in word2antonyms:
+            if word_name not in word2adj:
                 try:
                     embedding = model.get_vector(word_name)
-                    word2antonyms[word_name] = Adjective(
+                    word2adj[word_name] = Adjective(
                         word_name, embedding, set(), set()
                     )
                 except KeyError:
                     continue
 
-            adj = word2antonyms[word_name]
-            for antonym in word.antonyms():
-                adj.antonyms.add(antonym.name())
-
+            adj = word2adj[word_name]
+            adj.antonyms = adj.antonyms | current_antonyms
             adj.hyponyms = adj.hyponyms | current_hyponyms
 
-    return word2antonyms
+    return word2adj
 
+# def build_training_pairs(adj_dict, model):
+#     for adj in adj_dict.values():
+#         adj
+#     model.get_vector(
 
 def main():
     # Load the Google news pre-trained Word2Vec model
@@ -90,7 +103,8 @@ def main():
         GOOGLE_NEWS_PATH, binary=True
     )
     adj_dict = build_adjective_dict(model)
-    print(adj_dict["dry"])
+    print(sum(map(lambda x: len(x.antonyms), adj_dict.values())))
+    return adj_dict
 
 
 if __name__ == "__main__":
