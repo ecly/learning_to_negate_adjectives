@@ -92,10 +92,23 @@ def build_adjective_dict(model):
 
     return word2adj
 
-# def build_training_pairs(adj_dict, model):
-#     for adj in adj_dict.values():
-#         adj
-#     model.get_vector(
+def build_training_pairs(adj_dict, model):
+    """
+    Builds a list of adjective/antonym embedding pairs
+    for the given adj_dict and model. The model is used
+    for looking up the embeddings from an antonym name.
+    """
+    pairs = []
+    for adj in adj_dict.values():
+        for ant in adj.antonyms:
+            try:
+                ant_emb = model.get_vector(ant)
+                pairs.append((adj.embedding, ant_emb))
+            except KeyError:
+                continue
+
+    return pairs
+
 
 def main():
     # Load the Google news pre-trained Word2Vec model
@@ -104,7 +117,8 @@ def main():
     )
     adj_dict = build_adjective_dict(model)
     print(sum(map(lambda x: len(x.antonyms), adj_dict.values())))
-    return adj_dict
+    pairs = build_training_pairs(adj_dict, model)
+    print(len(pairs))
 
 
 if __name__ == "__main__":
