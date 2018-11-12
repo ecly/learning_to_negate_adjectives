@@ -7,37 +7,12 @@ import torch
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
+import gensim
 
 from model import Encoder, Decoder
+import data
 
 RHO = 0.95
-
-def calc_centroid(matrix):
-    """
-    Calculate centroid of numpy matrix
-
-    Returns: 1D torch tensor.
-    """
-
-    return torch.mean(torch.from_numpy(matrix), dim=0)
-
-
-def find_gate_vector(adjective, model):
-    """
-    TESTME
-    """
-    hyponym_count = len(adjective.hyponyms)
-    hyponyms = list(adjective.hyponyms)
-
-    if hyponym_count < CENTROID_BASIS_COUNT:
-        neighbors = model.most_similar(topn=hyponym_count + CENTROID_BASIS_COUNT)
-        relevant = list(filter(neighbors, lambda x: x not in adjective.hypoyms))
-        missing_hyponyms = hyponym_count-CENTROID_BASIS_COUNT
-        hyponyms = hyponyms + relevant[:missing_hyponyms]
-
-    embeddings = list(map(hyponyms, model.get_vector))
-    return calc_centroid(embeddings)
-
 
 def training_loop(encoder, decoder, model, pairs, iterations):
     pair_count = len(pairs)
@@ -47,22 +22,40 @@ def training_loop(encoder, decoder, model, pairs, iterations):
 
     for iteration in range(iterations):
         idx = iteration % pair_count
-        x, y = pairs[idx]
-        z = find_gate_vector(x, model)
-        loss = train(encoder, decoder, encoder_optimizer, decoder_optimizer, _loss_function, x, y, z)
+        x, z, y = pairs[idx]
+        loss = train(encoder, decoder, encoder_optimizer, decoder_optimizer, loss_function, x, z, y)
 
         if iteration % pair_count == 0:
             epoch = int(iteration/pair_count)
             print("Epoch %d, Iteration %d, Loss: %.2f" % ( epoch, iteration, loss))
 
 
-def train(encoder, decoder, enc_optim, dec_optim, loss_function, x, y, z):
+def train(encoder, decoder, enc_optim, dec_optim, loss_function, x, z, y):
+    enc_optim.zero_grad()
+    dec_optim.zero_grad()
+
+    h = encoder(x,z)
+    decoder_output = decoder(h, z)
+
+    loss = loss_function(decoder_output, y)
+    loss.backward()
+
+    enc_optim.step()
+    dec_optim.step()
+
+    return loss
 
 
 def main():
-    input_file = sys.argv[1]
+    model = gensim.models.KeyedVectors.load_word2vec_format(
+        data.GOOGLE_NEWS_PATH, binary=True
+    )
+    adj_dict = data.build_adjective_dict(model)
+    pairs = data.build_training_pairs(adj_dict, model)
     encoder = Encoder()
-    encoder = Decoder()
+    decoder = Decoder()
+
+    training_loop(encoder, decoder, model, pairs, 100)
 
 
 if __name__ == "__main__":
