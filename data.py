@@ -6,8 +6,10 @@ The pre-trained embeddings can be downloaded here:
 https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
 """
 import gensim
+import torch
 from nltk.corpus import wordnet as wn
 
+CENTROID_MIN_BASIS = 10
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
 
 
@@ -29,6 +31,34 @@ class Adjective:
             self.antonyms,
             self.hyponyms,
         )
+
+
+def calc_centroid(matrix):
+    """
+    Calculate centroid of list of torch tensors.
+
+    Returns: 1D torch tensor.
+    """
+
+    return torch.mean(matrix, dim=0)
+
+
+def find_gate_vector(adjective, model):
+    """
+    TESTME
+    """
+    hyponym_count = len(adjective.hyponyms)
+    hyponyms = list(map(model.get_vector, adjective.hyponyms))
+
+    if hyponym_count < CENTROID_MIN_BASIS:
+        neighbors = model.similar_by_vector(adjective.embedding, topn=hyponym_count + CENTROID_MIN_BASIS)
+        relevant = list(map(lambda x: torch.from_numpy(x[1]),
+                            filter(lambda x: x[0] not in adjective.hyponyms,
+                                   neighbors)))
+        missing_hyponyms = hyponym_count-CENTROID_MIN_BASIS
+        hyponyms = hyponyms + relevant[:missing_hyponyms]
+
+    return calc_centroid(torch.tensor(hyponyms))
 
 
 def build_hyponym_groups():
@@ -79,7 +109,7 @@ def build_adjective_dict(model):
 
             if word_name not in word2adj:
                 try:
-                    embedding = model.get_vector(word_name)
+                    embedding = torch.from_numpy(model.get_vector(word_name))
                     word2adj[word_name] = Adjective(
                         word_name, embedding, set(), set()
                     )
@@ -92,9 +122,10 @@ def build_adjective_dict(model):
 
     return word2adj
 
+
 def build_training_pairs(adj_dict, model):
     """
-    Builds a list of adjective/antonym embedding pairs
+    Builds a list of <adjective, cohyponym, antonym> triples
     for the given adj_dict and model. The model is used
     for looking up the embeddings from an antonym name.
     """
@@ -103,7 +134,8 @@ def build_training_pairs(adj_dict, model):
         for ant in adj.antonyms:
             try:
                 ant_emb = model.get_vector(ant)
-                pairs.append((adj.embedding, ant_emb))
+                centroid = find_gate_vector(adj, model)
+                pairs.append((adj.embedding, centroid, ant_emb))
             except KeyError:
                 continue
 
