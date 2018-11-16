@@ -5,12 +5,17 @@ Logic for building the data using NLTK and the binary of Google's
 The pre-trained embeddings can be downloaded here:
 https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
 """
+import sys
 import gensim
 import torch
 from nltk.corpus import wordnet as wn
 
 CENTROID_MIN_BASIS = 10
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
+
+
+def word_from_vector(vector, model):
+    return model.most_similar(positive=[vector.numpy()], topn=1)[0][0]
 
 
 class Adjective:
@@ -49,13 +54,15 @@ def find_gate_vector(adjective, model):
     """
     hyponym_count = len(adjective.hyponyms)
     hyponyms = list(map(model.get_vector, adjective.hyponyms))
+    filter_hyponyms = adjective.hyponyms | {adjective.name}
 
     if hyponym_count < CENTROID_MIN_BASIS:
-        neighbors = model.similar_by_vector(adjective.embedding, topn=hyponym_count + CENTROID_MIN_BASIS)
-        relevant = list(map(lambda x: torch.from_numpy(x[1]),
-                            filter(lambda x: x[0] not in adjective.hyponyms,
+        neighbors = model.similar_by_word(adjective.name, topn=hyponym_count + CENTROID_MIN_BASIS)
+        relevant = list(map(lambda x: torch.from_numpy(model.get_vector(x[0])),
+                            filter(lambda x: x[0] not in filter_hyponyms,
                                    neighbors)))
-        missing_hyponyms = hyponym_count-CENTROID_MIN_BASIS
+        # print(list(map(lambda x: word_from_vector(x, model), relevant)))
+        missing_hyponyms = CENTROID_MIN_BASIS - hyponym_count
         hyponyms = hyponyms + relevant[:missing_hyponyms]
 
     return calc_centroid(torch.tensor(hyponyms))
@@ -132,25 +139,27 @@ def build_training_pairs(adj_dict, model):
     pairs = []
     for adj in adj_dict.values():
         for ant in adj.antonyms:
+            # print(adj.name, ant)
             try:
-                ant_emb = model.get_vector(ant)
+                ant_emb = torch.from_numpy(model.get_vector(ant))
                 centroid = find_gate_vector(adj, model)
                 pairs.append((adj.embedding, centroid, ant_emb))
             except KeyError:
+                print("failed for %s and %s" % (adj.name, ant))
                 continue
 
     return pairs
 
-
 def main():
     # Load the Google news pre-trained Word2Vec model
     model = gensim.models.KeyedVectors.load_word2vec_format(
-        GOOGLE_NEWS_PATH, binary=True
-    )
+        GOOGLE_NEWS_PATH, binary=True)
     adj_dict = build_adjective_dict(model)
-    print(sum(map(lambda x: len(x.antonyms), adj_dict.values())))
+    # print(sum(map(lambda x: len(x.antonyms), adj_dict.values())))
     pairs = build_training_pairs(adj_dict, model)
-    print(len(pairs))
+    readable_pairs = list(map(lambda x: (word_from_vector(x[0], model), word_from_vector(x[2], model)), pairs))
+    print(readable_pairs)
+    # print(len(pairs))
 
 
 if __name__ == "__main__":
