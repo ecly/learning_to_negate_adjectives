@@ -51,17 +51,22 @@ def calc_centroid(matrix):
 
 def find_gate_vector(adjective, model):
     """
-    TESTME
+    Finds a gate vector for an adjective using the given model.
     """
     hyponym_count = len(adjective.hyponyms)
     hyponyms = list(map(model.get_vector, adjective.hyponyms))
     filter_hyponyms = adjective.hyponyms | {adjective.name}
 
     if hyponym_count < CENTROID_MIN_BASIS:
-        neighbors = model.similar_by_word(adjective.name, topn=hyponym_count + CENTROID_MIN_BASIS)
-        relevant = list(map(lambda x: torch.from_numpy(model.get_vector(x[0])),
-                            filter(lambda x: x[0] not in filter_hyponyms,
-                                   neighbors)))
+        neighbors = model.similar_by_word(
+            adjective.name, topn=hyponym_count + CENTROID_MIN_BASIS
+        )
+        relevant = list(
+            map(
+                lambda x: torch.from_numpy(model.get_vector(x[0])),
+                filter(lambda x: x[0] not in filter_hyponyms, neighbors),
+            )
+        )
         # print(list(map(lambda x: word_from_vector(x, model), relevant)))
         missing_hyponyms = CENTROID_MIN_BASIS - hyponym_count
         hyponyms = hyponyms + relevant[:missing_hyponyms]
@@ -86,6 +91,7 @@ def build_hyponym_groups():
             current_hyponyms.add(word.name())
 
     return hyponym_groups
+
 
 def antonyms_for_synset(synset):
     """Gets all antonyms for a given synset using its lemmas"""
@@ -118,9 +124,7 @@ def build_adjective_dict(model):
             if word_name not in word2adj:
                 try:
                     embedding = torch.from_numpy(model.get_vector(word_name))
-                    word2adj[word_name] = Adjective(
-                        word_name, embedding, set(), set()
-                    )
+                    word2adj[word_name] = Adjective(word_name, embedding, set(), set())
                 except KeyError:
                     continue
 
@@ -131,7 +135,7 @@ def build_adjective_dict(model):
     return word2adj
 
 
-def build_training_pairs(adj_dict, model, filtered=set()):
+def build_training_pairs(adj_dict, model, filtered=None):
     """
     Builds a list of <adjective, cohyponym, antonym> triples
     for the given adj_dict and model. The model is used
@@ -141,6 +145,7 @@ def build_training_pairs(adj_dict, model, filtered=set()):
     which we filter pairs where the input adjective is in that
     enumerable.
     """
+    filtered = [] if filtered is None else filtered
     pairs = []
     for adj in adj_dict.values():
         if adj in filtered:
@@ -157,6 +162,7 @@ def build_training_pairs(adj_dict, model, filtered=set()):
 
     return pairs
 
+
 def load_gre_filtered_words():
     """
     Loads and creates a set of the input words
@@ -169,14 +175,21 @@ def load_gre_filtered_words():
 
         return words
 
+
 def main():
     # Load the Google news pre-trained Word2Vec model
     model = gensim.models.KeyedVectors.load_word2vec_format(
-        GOOGLE_NEWS_PATH, binary=True)
+        GOOGLE_NEWS_PATH, binary=True
+    )
     adj_dict = build_adjective_dict(model)
     filtered_words = load_gre_filtered_words()
     pairs = build_training_pairs(adj_dict, model, filtered_words)
-    readable_pairs = list(map(lambda x: (word_from_vector(x[0], model), word_from_vector(x[2], model)), pairs))
+    readable_pairs = list(
+        map(
+            lambda x: (word_from_vector(x[0], model), word_from_vector(x[2], model)),
+            pairs,
+        )
+    )
     print(readable_pairs)
     # print(len(pairs))
 

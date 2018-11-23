@@ -9,6 +9,7 @@ EMBEDDING_SIZE = 300
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class Encoder(nn.Module):
     def __init__(self, hidden_size=HIDDEN_SIZE, input_size=EMBEDDING_SIZE):
         super(Encoder, self).__init__()
@@ -18,6 +19,7 @@ class Encoder(nn.Module):
 
     def forward(self, x, z):
         return self.activation(self.encoder_weights(z, x))
+
 
 class Decoder(nn.Module):
     def __init__(self, hidden_size=HIDDEN_SIZE, output_size=EMBEDDING_SIZE):

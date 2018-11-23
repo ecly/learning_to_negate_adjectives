@@ -14,6 +14,7 @@ import data
 
 RHO = 0.95
 
+
 def training_loop(encoder, decoder, model, pairs, iterations):
     pair_count = len(pairs)
     encoder_optimizer = optim.Adadelta(encoder.parameters(), rho=RHO)
@@ -23,18 +24,27 @@ def training_loop(encoder, decoder, model, pairs, iterations):
     for iteration in range(iterations):
         idx = iteration % pair_count
         x, z, y = pairs[idx]
-        loss = train(encoder, decoder, encoder_optimizer, decoder_optimizer, loss_function, x, z, y)
+        loss = train(
+            encoder,
+            decoder,
+            encoder_optimizer,
+            decoder_optimizer,
+            loss_function,
+            x,
+            z,
+            y,
+        )
 
         if iteration % pair_count == 0:
-            epoch = int(iteration/pair_count)
-            print("Epoch %d, Iteration %d, Loss: %.2f" % ( epoch, iteration, loss))
+            epoch = int(iteration / pair_count)
+            print("Epoch %d, Iteration %d, Loss: %.2f" % (epoch, iteration, loss))
 
 
 def train(encoder, decoder, enc_optim, dec_optim, loss_function, x, z, y):
     enc_optim.zero_grad()
     dec_optim.zero_grad()
 
-    h = encoder(x,z)
+    h = encoder(x, z)
     decoder_output = decoder(h, z)
 
     loss = loss_function(decoder_output, y)
