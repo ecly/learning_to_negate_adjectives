@@ -51,7 +51,8 @@ def main():
         data.GOOGLE_NEWS_PATH, binary=True
     )
     adj_dict = data.build_adjective_dict(model)
-    pairs = data.build_training_pairs(adj_dict, model)
+    filtered_words = data.load_gre_filtered_words()
+    pairs = data.build_training_pairs(adj_dict, model, filtered_words)
     encoder = Encoder()
     decoder = Decoder()
 

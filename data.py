@@ -11,6 +11,7 @@ import torch
 from nltk.corpus import wordnet as wn
 
 CENTROID_MIN_BASIS = 10
+GRE_FILTERED_WORDS = "./test/gre_test_adjs_inputwords.txt"
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
 
 
@@ -130,14 +131,20 @@ def build_adjective_dict(model):
     return word2adj
 
 
-def build_training_pairs(adj_dict, model):
+def build_training_pairs(adj_dict, model, filtered=set()):
     """
     Builds a list of <adjective, cohyponym, antonym> triples
     for the given adj_dict and model. The model is used
     for looking up the embeddings from an antonym name.
+
+    Optionally takes an enumerable of filtered words from
+    which we filter pairs where the input adjective is in that
+    enumerable.
     """
     pairs = []
     for adj in adj_dict.values():
+        if adj in filtered:
+            continue
         for ant in adj.antonyms:
             # print(adj.name, ant)
             try:
@@ -150,13 +157,25 @@ def build_training_pairs(adj_dict, model):
 
     return pairs
 
+def load_gre_filtered_words():
+    """
+    Loads and creates a set of the input words
+    for the GRE test set.
+    """
+    with open(GRE_FILTERED_WORDS, "r") as f:
+        words = set()
+        for word in f:
+            words.add(word.strip().lower())
+
+        return words
+
 def main():
     # Load the Google news pre-trained Word2Vec model
     model = gensim.models.KeyedVectors.load_word2vec_format(
         GOOGLE_NEWS_PATH, binary=True)
     adj_dict = build_adjective_dict(model)
-    # print(sum(map(lambda x: len(x.antonyms), adj_dict.values())))
-    pairs = build_training_pairs(adj_dict, model)
+    filtered_words = load_gre_filtered_words()
+    pairs = build_training_pairs(adj_dict, model, filtered_words)
     readable_pairs = list(map(lambda x: (word_from_vector(x[0], model), word_from_vector(x[2], model)), pairs))
     print(readable_pairs)
     # print(len(pairs))
