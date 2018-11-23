@@ -11,6 +11,8 @@ import torch
 from nltk.corpus import wordnet as wn
 
 CENTROID_MIN_BASIS = 10
+ANTONYM_THESAURUS = "./test/thesaurus_antonyms_extended"
+LB_GOLD_STANDRD = "./test/lb.inputwords"
 GRE_FILTERED_WORDS = "./test/gre_test_adjs_inputwords.txt"
 GRE_TEST_QUESTIONS = "./test/gre_testset_adjs.txt"
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
@@ -189,6 +191,24 @@ def load_gre_test_set():
             test_data.append((adj, options.strip().split(), answer.strip()))
 
         return test_data
+
+def load_gold_standard():
+    """
+    Loads and creates a dictionary mapping the 99 LB adjectives
+    to a list of their 'gold standard' antonyms.
+    """
+    data = {}
+    with open(LB_GOLD_STANDRD, "r") as f:
+        for word in f:
+            data[word.strip()] = []
+
+    with open(ANTONYM_THESAURUS, "r") as f:
+        for line in f:
+            adj, ant = line.strip().split(" ", 1)
+            if adj in data:
+                data[adj].append(ant)
+
+    return data
 
 
 def main():
