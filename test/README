@@ -1,0 +1,26 @@
+Laura Rimell, Amandla Mabona, Luana Bulat, and Douwe Kiela.
+Learning to Negate Adjectives with Bilinear Models.
+EACL 2017
+
+GRE data (Table 1)
+
+Data is from this paper and is in the original format:
+Saif Mohammad, Bonnie Dorr, and Graeme Hirst.
+Computing word-pair antonymy.
+ACL 2008
+
+    gre_devset_adjs.txt
+    gre_testset_adjs.txt
+
+Precision data (Table 2)
+
+Input words for the GRE and the Lenci & Benotto datasets:
+
+    gre_test_adjs_inputwords.txt
+    lb.inputwords
+
+The expanded set of antonyms scraped from the online version of
+Roget's 21st Century Thesaurus, 3rd Edition:
+
+    thesaurus_antonyms_extended
+
