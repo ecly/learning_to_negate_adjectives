@@ -12,6 +12,7 @@ from nltk.corpus import wordnet as wn
 
 CENTROID_MIN_BASIS = 10
 GRE_FILTERED_WORDS = "./test/gre_test_adjs_inputwords.txt"
+GRE_TEST_QUESTIONS = "./test/gre_testset_adjs.txt"
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
 
 
@@ -174,6 +175,20 @@ def load_gre_filtered_words():
             words.add(word.strip().lower())
 
         return words
+
+def load_gre_test_set():
+    """
+    Loads and creates a test set of tuples
+    <input, [options], answer> for antonym prediction.
+    """
+    with open(GRE_TEST_QUESTIONS, "r") as f:
+        test_data = []
+        for line in f:
+            adj, rest = line.split(": ", 1)
+            options, answer = rest.split(" :: ")
+            test_data.append((adj, options.strip().split(), answer.strip()))
+
+        return test_data
 
 
 def main():
