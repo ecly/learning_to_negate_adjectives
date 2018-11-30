@@ -19,6 +19,7 @@ LB_GOLD_STANDRD = "./test/lb.inputwords"
 GRE_FILTERED_WORDS = "./test/gre_test_adjs_inputwords.txt"
 GRE_TEST_QUESTIONS = "./test/gre_testset_adjs.txt"
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
+ADJ2EBM_PATH = "adj_emb.tsv"
 
 
 class Adjective:
@@ -41,25 +42,22 @@ class Adjective:
         )
 
 
-class Model:
+class AdjectiveModel:
     def __init__(self, adj2adj):
         self.adj2adj = adj2adj
         self.emb2adj = {a.embedding: a for _, a in adj2adj.items()}
         self.tensors = [a.embedding for _, a in adj2adj.items()]
         self.knn = self.make_knn_from_dict(self.tensors)
 
-
     def make_knn_from_dict(self, tensors):
         np_vectors = [t.numpy() for t in tensors]
-        knn = NearestNeighbors(n_neighbors=10, metric="cosine", algorithm="brute").fit(
+        knn = NearestNeighbors(n_neighbors=10, metric="cosine", algorithm="auto").fit(
             np_vectors
         )
         return knn
 
-
     def adj_from_name(self, name):
         return self.adj2adj[name]
-
 
     def adj_from_vector(self, vector):
         nn = self.knn.kneighbors(
@@ -68,10 +66,8 @@ class Model:
 
         return self.emb2adj[self.tensors[nn[0][0]]]
 
-
     def word_from_vector(self, vector):
         return self.adj_from_vector(vector).name
-
 
     def kneighbors(self, adj, k):
         nn = self.knn.kneighbors(
@@ -136,10 +132,10 @@ def antonyms_for_synset(synset):
     return antonyms
 
 
-def build_adjective_dict(model):
+def build_adjective_dict(adj2emb):
     """
     Build adjective dict using wordnet and the given
-    model for adjective word embeddings
+    adj2emb dictionary for adjective word embeddings.
     """
     word2adj = {}
     hyponym_groups = build_hyponym_groups()
@@ -156,7 +152,7 @@ def build_adjective_dict(model):
 
             if word_name not in word2adj:
                 try:
-                    embedding = torch.from_numpy(model.get_vector(word_name))
+                    embedding = torch.from_numpy(adj2emb[word_name])
                     word2adj[word_name] = Adjective(word_name, embedding, set(), set())
                 except KeyError:
                     continue
@@ -245,28 +241,30 @@ def load_gold_standard():
     return data
 
 
+def load_adj2emb(path=ADJ2EBM_PATH):
+    """
+    Loads the <adj, emb> pairs created with preprocess.py
+    into a dictionary.
+    """
+    with open(path, "r") as f:
+        adj2emb = {}
+        for line in f:
+            adj, emb_str = line.split("\t")
+            # trim away brackets when loading
+            emb = np.fromstring(emb_str[1:-1], sep=",")
+            adj2emb[adj] = emb
+
+        return adj2emb
+
+
 def main():
     # Load the Google news pre-trained Word2Vec model
-    gensim_model = gensim.models.KeyedVectors.load_word2vec_format(
-        GOOGLE_NEWS_PATH, binary=True
-    )
-    adj2adj = build_adjective_dict(gensim_model)
-    model = Model(adj2adj)
+    adj2emb = load_adj2emb(ADJ2EBM_PATH)
+    adj2adj = build_adjective_dict(adj2emb)
+    model = AdjectiveModel(adj2adj)
     filtered_words = load_gre_filtered_words()
     pairs = build_training_pairs(model, filtered_words)
-    readable_pairs = list(
-        map(
-            lambda x: (model.word_from_vector(x[0]),
-                       model.word_from_vector(x[1]),
-                       model.word_from_vector(x[2])),
-            pairs,
-        )
-    )
-    for p in readable_pairs:
-        print(p)
-
-    print(len(pairs))
-
+    print(len_pairs)
 
 if __name__ == "__main__":
     main()
