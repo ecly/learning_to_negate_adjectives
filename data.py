@@ -10,16 +10,15 @@ import gensim
 import torch
 from nltk.corpus import wordnet as wn
 
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+
 CENTROID_MIN_BASIS = 10
 ANTONYM_THESAURUS = "./test/thesaurus_antonyms_extended"
 LB_GOLD_STANDRD = "./test/lb.inputwords"
 GRE_FILTERED_WORDS = "./test/gre_test_adjs_inputwords.txt"
 GRE_TEST_QUESTIONS = "./test/gre_testset_adjs.txt"
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
-
-
-def word_from_vector(vector, model):
-    return model.most_similar(positive=[vector.numpy()], topn=1)[0][0]
 
 
 class Adjective:
@@ -42,6 +41,45 @@ class Adjective:
         )
 
 
+class Model:
+    def __init__(self, adj2adj):
+        self.adj2adj = adj2adj
+        self.emb2adj = {a.embedding: a for _, a in adj2adj.items()}
+        self.tensors = [a.embedding for _, a in adj2adj.items()]
+        self.knn = self.make_knn_from_dict(self.tensors)
+
+
+    def make_knn_from_dict(self, tensors):
+        np_vectors = [t.numpy() for t in tensors]
+        knn = NearestNeighbors(n_neighbors=10, metric="cosine", algorithm="brute").fit(
+            np_vectors
+        )
+        return knn
+
+
+    def adj_from_name(self, name):
+        return self.adj2adj[name]
+
+
+    def adj_from_vector(self, vector):
+        nn = self.knn.kneighbors(
+            vector.reshape(1, -1), n_neighbors=1, return_distance=False
+        )
+
+        return self.emb2adj[self.tensors[nn[0][0]]]
+
+
+    def word_from_vector(self, vector):
+        return self.adj_from_vector(vector).name
+
+
+    def kneighbors(self, adj, k):
+        nn = self.knn.kneighbors(
+            adj.embedding.numpy().reshape(1, -1), n_neighbors=k, return_distance=False
+        )
+        return list(map(lambda n: self.tensors[n], nn[0]))
+
+
 def calc_centroid(matrix):
     """
     Calculate centroid of list of torch tensors.
@@ -52,29 +90,21 @@ def calc_centroid(matrix):
     return torch.mean(matrix, dim=0)
 
 
-def find_gate_vector(adjective, model):
+def find_gate_vector(adj, model):
     """
     Finds a gate vector for an adjective using the given model.
     """
-    hyponym_count = len(adjective.hyponyms)
-    hyponyms = list(map(model.get_vector, adjective.hyponyms))
-    filter_hyponyms = adjective.hyponyms | {adjective.name}
+    hyp_count = len(adj.hyponyms)
+    hyp_emb = list(map(lambda a: model.adj_from_name(a).embedding, adj.hyponyms))
+    filter_hyp_emb = set(hyp_emb) | {adj.embedding}
 
-    if hyponym_count < CENTROID_MIN_BASIS:
-        neighbors = model.similar_by_word(
-            adjective.name, topn=hyponym_count + CENTROID_MIN_BASIS
-        )
-        relevant = list(
-            map(
-                lambda x: torch.from_numpy(model.get_vector(x[0])),
-                filter(lambda x: x[0] not in filter_hyponyms, neighbors),
-            )
-        )
-        # print(list(map(lambda x: word_from_vector(x, model), relevant)))
-        missing_hyponyms = CENTROID_MIN_BASIS - hyponym_count
-        hyponyms = hyponyms + relevant[:missing_hyponyms]
+    if hyp_count < CENTROID_MIN_BASIS:
+        neighbors = model.kneighbors(adj, CENTROID_MIN_BASIS)
+        relevant = [n for n in neighbors if n not in filter_hyp_emb]
+        missing_hyp = CENTROID_MIN_BASIS - hyp_count
+        hyp_emb = hyp_emb + relevant[:missing_hyp]
 
-    return calc_centroid(torch.tensor(hyponyms))
+    return calc_centroid(torch.stack(hyp_emb))
 
 
 def build_hyponym_groups():
@@ -138,11 +168,11 @@ def build_adjective_dict(model):
     return word2adj
 
 
-def build_training_pairs(adj_dict, model, filtered=None):
+def build_training_pairs(model, filtered=None):
     """
     Builds a list of <adjective, cohyponym, antonym> triples
-    for the given adj_dict and model. The model is used
-    for looking up the embeddings from an antonym name.
+    for the given model. The model contains all the adjectives,
+    and allows querying for embeddings using antonym names.
 
     Optionally takes an enumerable of filtered words from
     which we filter pairs where the input adjective is in that
@@ -150,18 +180,20 @@ def build_training_pairs(adj_dict, model, filtered=None):
     """
     filtered = [] if filtered is None else filtered
     pairs = []
-    for adj in adj_dict.values():
-        if adj in filtered:
-            continue
-        for ant in adj.antonyms:
-            # print(adj.name, ant)
-            try:
-                ant_emb = torch.from_numpy(model.get_vector(ant))
-                centroid = find_gate_vector(adj, model)
-                pairs.append((adj.embedding, centroid, ant_emb))
-            except KeyError:
-                print("failed for %s and %s" % (adj.name, ant))
+    for adj in model.adj2adj.values():
+        for adj_name in adj.hyponyms | {adj.name}:
+            if adj_name in filtered:
                 continue
+            for ant_name in adj.antonyms:
+                try:
+                    current_adj = model.adj_from_name(adj_name)
+                    adj_emb = current_adj.embedding
+                    ant_emb = model.adj_from_name(ant_name).embedding
+                    centroid = find_gate_vector(current_adj, model)
+                    pairs.append((adj_emb, centroid, ant_emb))
+                except KeyError:
+                    # print("failed for %s and %s" % (adj.name, ant))
+                    continue
 
     return pairs
 
@@ -178,6 +210,7 @@ def load_gre_filtered_words():
 
         return words
 
+
 def load_gre_test_set():
     """
     Loads and creates a test set of tuples
@@ -191,6 +224,7 @@ def load_gre_test_set():
             test_data.append((adj, options.strip().split(), answer.strip()))
 
         return test_data
+
 
 def load_gold_standard():
     """
@@ -213,20 +247,25 @@ def load_gold_standard():
 
 def main():
     # Load the Google news pre-trained Word2Vec model
-    model = gensim.models.KeyedVectors.load_word2vec_format(
+    gensim_model = gensim.models.KeyedVectors.load_word2vec_format(
         GOOGLE_NEWS_PATH, binary=True
     )
-    adj_dict = build_adjective_dict(model)
+    adj2adj = build_adjective_dict(gensim_model)
+    model = Model(adj2adj)
     filtered_words = load_gre_filtered_words()
-    pairs = build_training_pairs(adj_dict, model, filtered_words)
+    pairs = build_training_pairs(model, filtered_words)
     readable_pairs = list(
         map(
-            lambda x: (word_from_vector(x[0], model), word_from_vector(x[2], model)),
+            lambda x: (model.word_from_vector(x[0]),
+                       model.word_from_vector(x[1]),
+                       model.word_from_vector(x[2])),
             pairs,
         )
     )
-    print(readable_pairs)
-    # print(len(pairs))
+    for p in readable_pairs:
+        print(p)
+
+    print(len(pairs))
 
 
 if __name__ == "__main__":
