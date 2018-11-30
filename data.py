@@ -5,11 +5,8 @@ Logic for building the data using NLTK and the binary of Google's
 The pre-trained embeddings can be downloaded here:
 https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
 """
-import sys
-import gensim
 import torch
 from nltk.corpus import wordnet as wn
-
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 
@@ -41,15 +38,23 @@ class Adjective:
             self.hyponyms,
         )
 
-
 class AdjectiveModel:
+    """
+    An Adjective Model encapsulating mappings from
+    embeddings to adjectives and names to adjectives.
+
+    Also manages querying for k nearest neighbors among
+    all known adjectives.
+    """
     def __init__(self, adj2adj):
         self.adj2adj = adj2adj
-        self.emb2adj = {a.embedding: a for _, a in adj2adj.items()}
-        self.tensors = [a.embedding for _, a in adj2adj.items()]
-        self.knn = self.make_knn_from_dict(self.tensors)
+        self.emb2adj = {a.embedding: a for a in adj2adj.values()}
+        self.tensors = [a.embedding for a in adj2adj.values()]
+        self.knn = AdjectiveModel.make_knn_from_dict(self.tensors)
 
-    def make_knn_from_dict(self, tensors):
+    @staticmethod
+    def make_knn_from_dict(tensors):
+        """Make knn model using sklearn"""
         np_vectors = [t.numpy() for t in tensors]
         knn = NearestNeighbors(n_neighbors=10, metric="cosine", algorithm="auto").fit(
             np_vectors
@@ -57,23 +62,27 @@ class AdjectiveModel:
         return knn
 
     def adj_from_name(self, name):
+        """Get an Adjective from its name"""
         return self.adj2adj[name]
 
     def adj_from_vector(self, vector):
-        nn = self.knn.kneighbors(
+        """Get an Adjective from pytorch tensor embedding"""
+        neighbors = self.knn.kneighbors(
             vector.reshape(1, -1), n_neighbors=1, return_distance=False
         )
 
-        return self.emb2adj[self.tensors[nn[0][0]]]
+        return self.emb2adj[self.tensors[neighbors[0][0]]]
 
     def word_from_vector(self, vector):
+        """Get name of the Adjective with embedding closest to given vector"""
         return self.adj_from_vector(vector).name
 
     def kneighbors(self, adj, k):
-        nn = self.knn.kneighbors(
+        """Get the tensors of the k-nearest neighbors to given Adjective"""
+        neighbors = self.knn.kneighbors(
             adj.embedding.numpy().reshape(1, -1), n_neighbors=k, return_distance=False
         )
-        return list(map(lambda n: self.tensors[n], nn[0]))
+        return list(map(lambda n: self.tensors[n], neighbors[0]))
 
 
 def calc_centroid(matrix):
@@ -164,18 +173,30 @@ def build_adjective_dict(adj2emb):
     return word2adj
 
 
-def build_training_pairs(model, filtered=None):
+def build_training_triples(model, filtered=None, restricted=False):
     """
     Builds a list of <adjective, cohyponym, antonym> triples
     for the given model. The model contains all the adjectives,
     and allows querying for embeddings using antonym names.
 
     Optionally takes an enumerable of filtered words from
-    which we filter pairs where the input adjective is in that
+    which we filter triples where the input adjective is in that
     enumerable.
+
+    An additional option `restricted` represents whether hyponyms
+    for a word in filtered should be filtered as well.
     """
     filtered = [] if filtered is None else filtered
-    pairs = []
+
+    if restricted:
+        for f in filtered:
+            try:
+                filter_adj = model.adj_from_name(f)
+                filtered = filtered | filter_adj.hyponyms
+            except KeyError:
+                continue
+
+    triples = []
     for adj in model.adj2adj.values():
         for adj_name in adj.hyponyms | {adj.name}:
             if adj_name in filtered:
@@ -186,12 +207,12 @@ def build_training_pairs(model, filtered=None):
                     adj_emb = current_adj.embedding
                     ant_emb = model.adj_from_name(ant_name).embedding
                     centroid = find_gate_vector(current_adj, model)
-                    pairs.append((adj_emb, centroid, ant_emb))
+                    triples.append((adj_emb, centroid, ant_emb))
                 except KeyError:
                     # print("failed for %s and %s" % (adj.name, ant))
                     continue
 
-    return pairs
+    return triples
 
 
 def load_gre_filtered_words():
@@ -243,7 +264,7 @@ def load_gold_standard():
 
 def load_adj2emb(path=ADJ2EBM_PATH):
     """
-    Loads the <adj, emb> pairs created with preprocess.py
+    Loads the <adj, emb> triples created with preprocess.py
     into a dictionary.
     """
     with open(path, "r") as f:
@@ -257,14 +278,30 @@ def load_adj2emb(path=ADJ2EBM_PATH):
         return adj2emb
 
 
-def main():
-    # Load the Google news pre-trained Word2Vec model
+def build_triples_and_adj_model(restricted=False):
+    """
+    Simply access function running the entire Adjective Model
+    and training triple creation, including filtered based on GRE
+    all in one step.
+
+    Takes a parameter whether the filtering should be restricted
+    or not, as defined in Rimell 2018.
+
+    Returns a tuple with <train_triples, AdjectiveModel>.
+    """
     adj2emb = load_adj2emb(ADJ2EBM_PATH)
     adj2adj = build_adjective_dict(adj2emb)
-    model = AdjectiveModel(adj2adj)
+    adj_model = AdjectiveModel(adj2adj)
     filtered_words = load_gre_filtered_words()
-    pairs = build_training_pairs(model, filtered_words)
-    print(len_pairs)
+    triples = build_training_triples(adj_model, filtered_words, restricted)
+    return triples, adj_model
+
+
+def main():
+    """Build model and print length of training triples"""
+    # Load the Google news pre-trained Word2Vec model
+    triples, _ = build_triples_and_adj_model()
+    print(len(triples))
 
 if __name__ == "__main__":
     main()
