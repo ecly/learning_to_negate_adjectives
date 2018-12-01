@@ -1,9 +1,6 @@
-import random
 import time
 import sys
-import math
 
-import torch
 import torch.nn as nn
 from torch import optim
 from scipy.spatial import distance
@@ -13,17 +10,23 @@ import data
 
 RHO = 0.95
 
+def print_progress(start, count, iteration, loss):
+    """Print progress as <Epoch, Iteration, Elapsed, Loss>"""
+    elapsed = time.time() - start
+    epoch = int(iteration / count)
+    print("Epoch %d, Iteration %d, Elapsed: %d, Loss: %.2f" % (epoch, iteration, elapsed, loss))
 
-def training_loop(encoder, decoder, triples, iterations):
+
+def training_loop(encoder, decoder, triples, iterations, print_every, adj_model):
     """Training loop, running for given amount of iterations on given triples"""
     triple_count = len(triples)
     encoder_optimizer = optim.Adadelta(encoder.parameters(), rho=RHO)
     decoder_optimizer = optim.Adadelta(decoder.parameters(), rho=RHO)
     loss_function = nn.MSELoss()
+    start = time.time()
 
     for iteration in range(iterations):
-        idx = iteration % triple_count
-        x, z, y = triples[idx]
+        x, z, y = triples[iteration % triple_count]
         loss = train(
             encoder,
             decoder,
@@ -35,9 +38,9 @@ def training_loop(encoder, decoder, triples, iterations):
             y,
         )
 
-        if iteration % triple_count == 0:
-            epoch = int(iteration / triple_count)
-            print("Epoch %d, Iteration %d, Loss: %.2f" % (epoch, iteration, loss))
+        if iteration % print_every == 0 or iteration % triple_count == 0:
+            evaluate_gre(encoder, decoder, adj_model)
+            print_progress(start, triple_count, iteration, loss)
 
 
 def train(encoder, decoder, enc_optim, dec_optim, loss_function, x, z, y):
@@ -48,7 +51,6 @@ def train(encoder, decoder, enc_optim, dec_optim, loss_function, x, z, y):
     decoder_output = predict_ant(encoder, decoder, x, z)
 
     loss = loss_function(decoder_output, y)
-    print("%.2f" % loss)
     loss.backward()
 
     enc_optim.step()
@@ -118,7 +120,7 @@ def main():
     decoder.double()
 
     evaluate_gre(encoder, decoder, adj_model)
-    training_loop(encoder, decoder, triples, 100)
+    training_loop(encoder, decoder, triples, 20000, 100, adj_model)
     evaluate_gre(encoder, decoder, adj_model)
 
 
