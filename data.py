@@ -38,6 +38,7 @@ class Adjective:
             self.hyponyms,
         )
 
+
 class AdjectiveModel:
     """
     An Adjective Model encapsulating mappings from
@@ -46,6 +47,7 @@ class AdjectiveModel:
     Also manages querying for k nearest neighbors among
     all known adjectives.
     """
+
     def __init__(self, adj2adj):
         self.adj2adj = adj2adj
         self.emb2adj = {a.embedding: a for a in adj2adj.values()}
@@ -71,7 +73,9 @@ class AdjectiveModel:
             vector.reshape(1, -1), n_neighbors=1, return_distance=False
         )
 
-        return self.emb2adj[self.tensors[neighbors[0][0]]]
+    def has_adj(self, name):
+        """Returns True if given adj is known to model otherwise False"""
+        return name in self.adj2adj
 
     def word_from_vector(self, vector):
         """Get name of the Adjective with embedding closest to given vector"""
@@ -100,7 +104,12 @@ def find_gate_vector(adj, model):
     Finds a gate vector for an adjective using the given model.
     """
     hyp_count = len(adj.hyponyms)
-    hyp_emb = list(map(lambda a: model.adj_from_name(a).embedding, adj.hyponyms))
+    hyp_emb = list(
+        map(
+            lambda a: model.adj_from_name(a).embedding,
+            filter(model.has_adj, adj.hyponyms),
+        )
+    )
     filter_hyp_emb = set(hyp_emb) | {adj.embedding}
 
     if hyp_count < CENTROID_MIN_BASIS:
@@ -228,17 +237,23 @@ def load_gre_filtered_words():
         return words
 
 
-def load_gre_test_set():
+def load_gre_test_set(adj_model):
     """
     Loads and creates a test set of tuples
     <input, [options], answer> for antonym prediction.
+
+    The given adj_model is used to remove questions
+    where
     """
     with open(GRE_TEST_QUESTIONS, "r") as f:
         test_data = []
         for line in f:
-            adj, rest = line.split(": ", 1)
-            options, answer = rest.split(" :: ")
-            test_data.append((adj, options.strip().split(), answer.strip()))
+            adj, rest = line.strip().split(": ", 1)
+            opt_str, answer = rest.split(" :: ")
+            options = opt_str.split()
+            #only keep questions where we know all words
+            if all(adj_model.has_adj(x) for x in options + [adj, answer]):
+                test_data.append((adj, options, answer))
 
         return test_data
 
@@ -302,6 +317,7 @@ def main():
     # Load the Google news pre-trained Word2Vec model
     triples, _ = build_triples_and_adj_model()
     print(len(triples))
+
 
 if __name__ == "__main__":
     main()
