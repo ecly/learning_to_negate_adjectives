@@ -14,7 +14,7 @@ def print_progress(start, count, iteration, loss):
     """Print progress as <Epoch, Iteration, Elapsed, Loss>"""
     elapsed = time.time() - start
     epoch = int(iteration / count)
-    print("Epoch %d, Iteration %d, Elapsed: %d, Loss: %.2f" % (epoch, iteration, elapsed, loss))
+    print("Epoch %d, Iteration %d, Elapsed: %ds, Loss: %.2f" % (epoch, iteration, elapsed, loss))
 
 
 def training_loop(encoder, decoder, triples, iterations, print_every, adj_model):
@@ -112,14 +112,15 @@ def evaluate_gre(encoder, decoder, adj_model, gre=None):
 
 
 def main():
+    start = time.time()
     triples, adj_model = data.build_triples_and_adj_model(restricted=False)
+    print("Built input/adj_model in %ds" % (time.time() - start))
     encoder = Encoder()
     decoder = Decoder()
     # make enc/dec uses doubles since our input is doubles
     encoder.double()
     decoder.double()
 
-    evaluate_gre(encoder, decoder, adj_model)
     training_loop(encoder, decoder, triples, 20000, 100, adj_model)
     evaluate_gre(encoder, decoder, adj_model)
 

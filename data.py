@@ -199,27 +199,23 @@ def build_training_triples(model, filtered=None, restricted=False):
 
     if restricted:
         for f in filtered:
-            try:
+            if model.has_adj(f):
                 filter_adj = model.adj_from_name(f)
                 filtered = filtered | filter_adj.hyponyms
-            except KeyError:
-                continue
 
     triples = []
     for adj in model.adj2adj.values():
         for adj_name in adj.hyponyms | {adj.name}:
-            if adj_name in filtered:
+            if adj_name in filtered or not model.has_adj(adj_name):
                 continue
+
+            current_adj = model.adj_from_name(adj_name)
+            adj_emb = current_adj.embedding
+            centroid = find_gate_vector(current_adj, model)
             for ant_name in adj.antonyms:
-                try:
-                    current_adj = model.adj_from_name(adj_name)
-                    adj_emb = current_adj.embedding
+                if model.has_adj(ant_name):
                     ant_emb = model.adj_from_name(ant_name).embedding
-                    centroid = find_gate_vector(current_adj, model)
                     triples.append((adj_emb, centroid, ant_emb))
-                except KeyError:
-                    # print("failed for %s and %s" % (adj.name, ant))
-                    continue
 
     return triples
 
