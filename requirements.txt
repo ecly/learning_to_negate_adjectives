@@ -1,0 +1,6 @@
+pytorch
+numpy
+scikit-learn
+nltk
+gensim
+scipy
