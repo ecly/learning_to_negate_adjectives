@@ -5,7 +5,17 @@ import torch
 
 HIDDEN_SIZE = 600
 EMBEDDING_SIZE = 300
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+class EncoderDecoder(nn.Module):
+    def __init__(self, hidden_size=HIDDEN_SIZE, embedding_size=EMBEDDING_SIZE):
+        super(EncoderDecoder, self).__init__()
+        self.encoder = Encoder(hidden_size, embedding_size)
+        self.decoder = Encoder(hidden_size, embedding_size)
+
+    def forward(self, x, z):
+        h = self.encoder(x, z)
+        return self.decoder(h, z)
+
 
 class Encoder(nn.Module):
     def __init__(self, hidden_size=HIDDEN_SIZE, embedding_size=EMBEDDING_SIZE):

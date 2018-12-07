@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch import optim
 from scipy.spatial import distance
 
-from model import Encoder, Decoder
+from model import EncoderDecoder
 import data
 
 RHO = 0.95
@@ -19,21 +19,18 @@ def print_progress(start, count, iteration, loss):
     print("Epoch %d, Iteration %d, Elapsed: %ds, Loss: %.2f" % (epoch, iteration, elapsed, loss))
 
 
-def training_loop(encoder, decoder, triples, iterations, print_every, adj_model):
+def training_loop(model, triples, iterations, print_every, adj_model):
     """Training loop, running for given amount of iterations on given triples"""
     triple_count = len(triples)
-    encoder_optimizer = optim.Adadelta(encoder.parameters(), rho=RHO)
-    decoder_optimizer = optim.Adadelta(decoder.parameters(), rho=RHO)
+    optimizer = optim.Adadelta(model.parameters(), rho=RHO)
     loss_function = nn.MSELoss()
     start = time.time()
 
     for iteration in range(iterations):
         x, z, y = triples[iteration % triple_count]
         loss = train(
-            encoder,
-            decoder,
-            encoder_optimizer,
-            decoder_optimizer,
+            model,
+            optimizer,
             loss_function,
             x,
             z,
@@ -41,32 +38,22 @@ def training_loop(encoder, decoder, triples, iterations, print_every, adj_model)
         )
 
         if iteration % print_every == 0 or iteration % triple_count == 0:
-            evaluate_gre(encoder, decoder, adj_model)
+            evaluate_gre(model, adj_model)
             print_progress(start, triple_count, iteration, loss)
 
 
-def train(encoder, decoder, enc_optim, dec_optim, loss_function, x, z, y):
+def train(model, optimizer, loss_function, x, z, y):
     """Run a single training iteration"""
-    enc_optim.zero_grad()
-    dec_optim.zero_grad()
+    model.zero_grad()
 
-    decoder_output = predict_ant(encoder, decoder, x, z)
+    y_pred = model(x, z)
 
-    loss = loss_function(decoder_output, y)
+    loss = loss_function(y_pred, y)
     loss.backward()
 
-    enc_optim.step()
-    dec_optim.step()
+    optimizer.step()
 
     return loss
-
-def predict_ant(encoder, decoder, x, z):
-    """
-    Predict antonym with given encoder and decoder
-    for input x and its gate vector z
-    """
-    h = encoder(x, z)
-    return decoder(h, z)
 
 
 def compute_cosine(t1, t2):
@@ -74,7 +61,7 @@ def compute_cosine(t1, t2):
     return distance.cosine(t1.numpy(), t2.numpy())
 
 
-def evaluate_gre(encoder, decoder, adj_model, gre=None):
+def evaluate_gre(model, adj_model, gre=None):
     """
     Evaluate the given encoder, decoder according to GRE
     question set. The given adj_model is needed to compute
@@ -91,7 +78,7 @@ def evaluate_gre(encoder, decoder, adj_model, gre=None):
         adj = adj_model.adj_from_name(adj_str)
         gate = data.find_gate_vector(adj, adj_model)
 
-        adj_ant_pred = predict_ant(encoder, decoder, adj.embedding, gate)
+        adj_ant_pred = model(adj.embedding, gate)
 
         closest_dist = sys.maxsize
         closest_word = ""
@@ -124,16 +111,15 @@ def main():
         y.to(device)
         z.to(device)
 
-    encoder = Encoder()
-    encoder.to(device)
-    decoder = Decoder()
-    decoder.to(device)
-    # make enc/dec uses doubles since our input is doubles
-    encoder.double()
-    decoder.double()
 
-    training_loop(encoder, decoder, triples, 20000, 100, adj_model)
-    evaluate_gre(encoder, decoder, adj_model)
+    model = EncoderDecoder()
+    # make enc/dec uses doubles since our input is doubles
+    model.double()
+    model.to(device)
+
+    training_loop(model, triples, 20000, 100, adj_model)
+    evaluate_gre(model, adj_model)
+    torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
