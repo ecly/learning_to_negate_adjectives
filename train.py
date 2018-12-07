@@ -106,16 +106,12 @@ def main():
     triples, adj_model = data.build_triples_and_adj_model(restricted=False)
     print("Built input/adj_model in %ds" % (time.time() - start))
     print("Training on: ", device)
-    for x, y, z in triples:
-        x.to(device)
-        y.to(device)
-        z.to(device)
-
-
     model = EncoderDecoder()
     # make enc/dec uses doubles since our input is doubles
     model.double()
-    model.to(device)
+    if device == "cuda":
+        triples = [(x.to(device), y.to(device), z.to(device)) for x, y, z in triples]
+        model.to(device)
 
     training_loop(model, triples, 20000, 100, adj_model)
     evaluate_gre(model, adj_model)
