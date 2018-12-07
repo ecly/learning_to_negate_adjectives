@@ -5,7 +5,9 @@ Logic for building the data using NLTK and the binary of Google's
 The pre-trained embeddings can be downloaded here:
 https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
 """
+from collections import defaultdict
 import torch
+from torch.utils.data import Dataset
 from nltk.corpus import wordnet as wn
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
@@ -16,7 +18,7 @@ LB_GOLD_STANDRD = "./test/lb.inputwords"
 GRE_FILTERED_WORDS = "./test/gre_test_adjs_inputwords.txt"
 GRE_TEST_QUESTIONS = "./test/gre_testset_adjs.txt"
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
-ADJ2EBM_PATH = "adj_emb.tsv"
+ADJ2EBM_PATH = "./adj_emb.tsv"
 
 
 class Adjective:
@@ -72,6 +74,7 @@ class AdjectiveModel:
         neighbors = self.knn.kneighbors(
             vector.reshape(1, -1), n_neighbors=1, return_distance=False
         )
+        return self.emb2adj[self.tensors[neighbors[0][0]]]
 
     def has_adj(self, name):
         """Returns True if given adj is known to model otherwise False"""
@@ -87,6 +90,18 @@ class AdjectiveModel:
             adj.embedding.numpy().reshape(1, -1), n_neighbors=k, return_distance=False
         )
         return list(map(lambda n: self.tensors[n], neighbors[0]))
+
+
+class AdjectiveDataset(Dataset):
+    def __init__(self, data):
+        self.data = data
+        self.len = len(data)
+
+    def __getitem__(self, index):
+        return self.data[index]
+
+    def __len__(self):
+        return self.len
 
 
 def calc_centroid(matrix):
@@ -168,12 +183,9 @@ def build_adjective_dict(adj2emb):
         for word in synset.lemmas():
             word_name = word.name()
 
-            if word_name not in word2adj:
-                try:
-                    embedding = torch.from_numpy(adj2emb[word_name])
-                    word2adj[word_name] = Adjective(word_name, embedding, set(), set())
-                except KeyError:
-                    continue
+            if word_name not in word2adj and word_name in adj2emb:
+                embedding = torch.from_numpy(adj2emb[word_name])
+                word2adj[word_name] = Adjective(word_name, embedding, set(), set())
 
             adj = word2adj[word_name]
             adj.antonyms = adj.antonyms | current_antonyms
@@ -182,11 +194,11 @@ def build_adjective_dict(adj2emb):
     return word2adj
 
 
-def build_training_triples(model, filtered=None, restricted=False):
+def build_dataset(model, filtered=None, restricted=False):
     """
-    Builds a list of <adjective, cohyponym, antonym> triples
-    for the given model. The model contains all the adjectives,
-    and allows querying for embeddings using antonym names.
+    Builds an AdjectiveDataset for the given model.
+    The model contains all the adjectives, and allows querying
+    for embeddings using antonym names.
 
     Optionally takes an enumerable of filtered words from
     which we filter triples where the input adjective is in that
@@ -212,12 +224,12 @@ def build_training_triples(model, filtered=None, restricted=False):
             current_adj = model.adj_from_name(adj_name)
             adj_emb = current_adj.embedding
             centroid = find_gate_vector(current_adj, model)
-            for ant_name in adj.antonyms:
-                if model.has_adj(ant_name):
-                    ant_emb = model.adj_from_name(ant_name).embedding
-                    triples.append((adj_emb, centroid, ant_emb))
 
-    return triples
+            for ant_name in filter(model.has_adj, adj.antonyms):
+                ant_emb = model.adj_from_name(ant_name).embedding
+                triples.append((adj_emb, centroid, ant_emb))
+
+    return AdjectiveDataset(triples)
 
 
 def load_gre_filtered_words():
@@ -254,21 +266,30 @@ def load_gre_test_set(adj_model):
         return test_data
 
 
-def load_gold_standard():
+def load_gold_standard(adj_model, gre_data=None):
     """
     Loads and creates a dictionary mapping the 99 LB adjectives
     to a list of their 'gold standard' antonyms.
     """
-    data = {}
+    gre_data = [] if gre_data is None else gre_data
+    data = defaultdict(set)
     with open(LB_GOLD_STANDRD, "r") as f:
         for word in f:
-            data[word.strip()] = []
+            data[word.strip()] = set()
 
     with open(ANTONYM_THESAURUS, "r") as f:
         for line in f:
             adj, ant = line.strip().split(" ", 1)
             if adj in data:
-                data[adj].append(ant)
+                data[adj].add(ant)
+
+    for adj, _, answer in gre_data:
+        data[adj].add(answer)
+
+    for adj, ants in data.items():
+        if adj_model.has_adj(adj):
+            ants = adj_model.adj_from_name(adj).antonyms
+            ants.update(ants)
 
     return data
 
@@ -289,7 +310,7 @@ def load_adj2emb(path=ADJ2EBM_PATH):
         return adj2emb
 
 
-def build_triples_and_adj_model(restricted=False):
+def build_dataset_and_adj_model(restricted=False):
     """
     Simply access function running the entire Adjective Model
     and training triple creation, including filtered based on GRE
@@ -298,21 +319,22 @@ def build_triples_and_adj_model(restricted=False):
     Takes a parameter whether the filtering should be restricted
     or not, as defined in Rimell 2018.
 
-    Returns a tuple with <train_triples, AdjectiveModel>.
+    Returns a tuple with <AdjectiveDataset, AdjectiveModel>.
     """
     adj2emb = load_adj2emb(ADJ2EBM_PATH)
     adj2adj = build_adjective_dict(adj2emb)
     adj_model = AdjectiveModel(adj2adj)
     filtered_words = load_gre_filtered_words()
-    triples = build_training_triples(adj_model, filtered_words, restricted)
-    return triples, adj_model
+    # gold_standard = load_gold_standard(adj_model)
+    dataset = build_dataset(adj_model, filtered_words, restricted)
+    return dataset, adj_model
 
 
 def main():
     """Build model and print length of training triples"""
     # Load the Google news pre-trained Word2Vec model
-    triples, _ = build_triples_and_adj_model()
-    print(len(triples))
+    dataset, _ = build_dataset_and_adj_model()
+    print(len(dataset.data))
 
 
 if __name__ == "__main__":

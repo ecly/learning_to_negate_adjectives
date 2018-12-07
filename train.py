@@ -1,8 +1,13 @@
+"""
+Module for loading/saving/training a adjective negation model.
+Also includes evaluation code.
+"""
 import time
 import sys
 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 from torch import optim
 from scipy.spatial import distance
 
@@ -10,44 +15,43 @@ from model import EncoderDecoder
 import data
 
 RHO = 0.95
+BATCH_SIZE = 48
+EPOCHS = 200
+MODEL_PATH = "adjective_negation_model"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def print_progress(start, count, iteration, loss):
-    """Print progress as <Epoch, Iteration, Elapsed, Loss>"""
+def print_progress(start, epoch, batch, loss):
+    """Print progress as <Epoch, Batch, Elapsed, Loss>"""
     elapsed = time.time() - start
-    epoch = int(iteration / count)
-    print("Epoch %d, Iteration %d, Elapsed: %ds, Loss: %.2f" % (epoch, iteration, elapsed, loss))
+    print("Epoch %d, Batch %d, Elapsed: %ds, Loss: %.2f" % (epoch, batch, elapsed, loss))
 
 
-def training_loop(model, triples, iterations, print_every, adj_model):
+def training_loop(model, data_loader, epochs, adj_model):
     """Training loop, running for given amount of iterations on given triples"""
-    triple_count = len(triples)
     optimizer = optim.Adadelta(model.parameters(), rho=RHO)
     loss_function = nn.MSELoss()
     start = time.time()
 
-    for iteration in range(iterations):
-        x, z, y = triples[iteration % triple_count]
-        loss = train(
-            model,
-            optimizer,
-            loss_function,
-            x,
-            z,
-            y,
-        )
-
-        if iteration % print_every == 0 or iteration % triple_count == 0:
+    for epoch in range(epochs):
+        with torch.set_grad_enabled(False):
             evaluate_gre(model, adj_model)
-            print_progress(start, triple_count, iteration, loss)
+        for batch_idx, batch in enumerate(data_loader):
+            loss = train(
+                model,
+                optimizer,
+                loss_function,
+                batch.to(device)
+            )
+            print_progress(start, epoch, batch_idx, loss)
 
 
-def train(model, optimizer, loss_function, x, z, y):
+def train(model, optimizer, loss_function, batch):
     """Run a single training iteration"""
+    x, z, y = batch
+    x, z, y = x.to(device), z.to(device), y.to(device)
+
     model.zero_grad()
-
     y_pred = model(x, z)
-
     loss = loss_function(y_pred, y)
     loss.backward()
 
@@ -56,9 +60,9 @@ def train(model, optimizer, loss_function, x, z, y):
     return loss
 
 
-def compute_cosine(t1, t2):
+def compute_cosine(tensor1, tensor2):
     """Compute cosine similarity between two pytorch tensors"""
-    return distance.cosine(t1.numpy(), t2.numpy())
+    return distance.cosine(tensor1.numpy(), tensor2.numpy())
 
 
 def evaluate_gre(model, adj_model, gre=None):
@@ -78,7 +82,8 @@ def evaluate_gre(model, adj_model, gre=None):
         adj = adj_model.adj_from_name(adj_str)
         gate = data.find_gate_vector(adj, adj_model)
 
-        adj_ant_pred = model(adj.embedding, gate)
+        x, y = adj.embedding.to(device), gate.to(device)
+        adj_ant_pred = model(x, y)
 
         closest_dist = sys.maxsize
         closest_word = ""
@@ -102,19 +107,26 @@ def evaluate_gre(model, adj_model, gre=None):
 
 
 def main():
+    """Build dataset and train model"""
     start = time.time()
-    triples, adj_model = data.build_triples_and_adj_model(restricted=False)
-    print("Built input/adj_model in %ds" % (time.time() - start))
-    print("Training on: ", device)
-    model = EncoderDecoder()
-    # make enc/dec uses doubles since our input is doubles
-    model.double()
-    if device == "cuda":
-        triples = [(x.to(device), y.to(device), z.to(device)) for x, y, z in triples]
-        model.to(device)
+    dataset, adj_model = data.build_dataset_and_adj_model(restricted=False)
 
-    training_loop(model, triples, 20000, 100, adj_model)
-    evaluate_gre(model, adj_model)
+    print("Built input/adj_model in %ds" % (time.time() - start))
+    data_loader = DataLoader(dataset=dataset, batch_size=BATCH_SIZE, shuffle=True)
+    model = EncoderDecoder()
+    # model.load_state_dict(torch.load(MODEL_PATH)
+    # make model use doubles since our input is doubles
+    model.double()
+    if device == "cuda" and torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+
+    model.to(device)
+
+    print("Training on: ", device)
+    training_loop(model, data_loader, EPOCHS, adj_model)
+    with torch.set_grad_enabled(False):
+        evaluate_gre(model, adj_model)
+    torch.save(model.state_dict(), MODEL_PATH)
     torch.cuda.empty_cache()
 
 
