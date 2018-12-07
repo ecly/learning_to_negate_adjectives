@@ -1,6 +1,7 @@
 import time
 import sys
 
+import torch
 import torch.nn as nn
 from torch import optim
 from scipy.spatial import distance
@@ -9,6 +10,7 @@ from model import Encoder, Decoder
 import data
 
 RHO = 0.95
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def print_progress(start, count, iteration, loss):
     """Print progress as <Epoch, Iteration, Elapsed, Loss>"""
@@ -97,6 +99,7 @@ def evaluate_gre(encoder, decoder, adj_model, gre=None):
             opt = adj_model.adj_from_name(opt_str)
             # prediction needs detach since torch can do numpy() when var requires grad
             dist = compute_cosine(adj_ant_pred.detach(), opt.embedding)
+            print(dist)
             if dist < closest_dist:
                 closest_dist = dist
                 closest_word = opt_str
@@ -115,8 +118,16 @@ def main():
     start = time.time()
     triples, adj_model = data.build_triples_and_adj_model(restricted=False)
     print("Built input/adj_model in %ds" % (time.time() - start))
+    print("Training on: ", device)
+    for x, y, z in triples:
+        x.to(device)
+        y.to(device)
+        z.to(device)
+
     encoder = Encoder()
+    encoder.to(device)
     decoder = Decoder()
+    decoder.to(device)
     # make enc/dec uses doubles since our input is doubles
     encoder.double()
     decoder.double()
