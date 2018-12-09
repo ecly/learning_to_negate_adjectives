@@ -59,7 +59,7 @@ class AdjectiveModel:
     @staticmethod
     def make_knn_from_dict(tensors):
         """Make knn model using sklearn"""
-        np_vectors = [t.numpy() for t in tensors]
+        np_vectors = [t.cpu().numpy() for t in tensors]
         knn = NearestNeighbors(n_neighbors=10, metric="cosine", algorithm="auto").fit(
             np_vectors
         )
@@ -72,7 +72,7 @@ class AdjectiveModel:
     def adj_from_vector(self, vector):
         """Get an Adjective from pytorch tensor embedding"""
         neighbors = self.knn.kneighbors(
-            vector.reshape(1, -1), n_neighbors=1, return_distance=False
+            vector.cpu().numpy().reshape(1, -1), n_neighbors=1, return_distance=False
         )
         return self.emb2adj[self.tensors[neighbors[0][0]]]
 
@@ -87,7 +87,7 @@ class AdjectiveModel:
     def kneighbors(self, adj, k):
         """Get the tensors of the k-nearest neighbors to given Adjective"""
         neighbors = self.knn.kneighbors(
-            adj.embedding.numpy().reshape(1, -1), n_neighbors=k, return_distance=False
+            adj.embedding.cpu().numpy().reshape(1, -1), n_neighbors=k, return_distance=False
         )
         return list(map(lambda n: self.tensors[n], neighbors[0]))
 

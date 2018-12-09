@@ -85,7 +85,7 @@ def initialize_model(model_path=None, device=DEVICE):
     if device.type == "cuda" and torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
 
-    model.double() #use doubles since our input is doubles
+    model.double()  # use doubles since our input is doubles
     model.to(device)
     return model, optimizer
 
@@ -117,8 +117,8 @@ def main():
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
-        device = sys.argv[1].lower()
-        assert device in ["cpu", "cuda"]
-        DEVICE = torch.device(device)
+        device_type = sys.argv[1].lower()
+        assert device_type in ["cpu", "cuda"]
+        DEVICE = torch.device(device_type)
 
     main()

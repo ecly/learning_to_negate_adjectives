@@ -14,6 +14,7 @@ import train
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 def compute_cosine(tensor1, tensor2, device=DEVICE):
     """
     Compute cosine similarity between two pytorch tensors
@@ -119,6 +120,7 @@ def main(model_path, device=DEVICE):
     The EncoderDecoder model is then evaluated on both GRE question
     answer set and on the gold standard antonym prediction task.
     """
+    print("Building dataset and adjectives")
     adj_model = data.build_adj_model()
     model, _optimizer = train.initialize_model(model_path, device)
     model.eval()
@@ -132,6 +134,6 @@ if __name__ == "__main__":
     elif len(sys.argv) == 2:
         main(sys.argv[1])
     elif len(sys.argv) == 3:
-        device = sys.argv[2].lower()
-        assert device in ["cpu", "cuda"]
-        main(sys.argv[1], torch.device(device))
+        device_type = sys.argv[2].lower()
+        assert device_type in ["cpu", "cuda"]
+        main(sys.argv[1], torch.device(device_type))
