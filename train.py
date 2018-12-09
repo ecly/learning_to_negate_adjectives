@@ -7,9 +7,9 @@ import sys
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch import optim
-from scipy.spatial import distance
 
 from model import EncoderDecoder
 import data
@@ -33,6 +33,7 @@ def training_loop(model, data_loader, epochs, adj_model):
     start = time.time()
 
     for epoch in range(epochs):
+        print("Epoch %d:" % epoch")
         with torch.set_grad_enabled(False):
             evaluate_gre(model, adj_model)
         for batch_idx, batch in enumerate(data_loader):
@@ -40,7 +41,7 @@ def training_loop(model, data_loader, epochs, adj_model):
                 model,
                 optimizer,
                 loss_function,
-                batch.to(device)
+                batch
             )
             print_progress(start, epoch, batch_idx, loss)
 
@@ -61,8 +62,14 @@ def train(model, optimizer, loss_function, batch):
 
 
 def compute_cosine(tensor1, tensor2):
-    """Compute cosine similarity between two pytorch tensors"""
-    return distance.cosine(tensor1.numpy(), tensor2.numpy())
+    """
+    Compute cosine similarity between two pytorch tensors
+    Returns a regular python float where 1.0 means identical
+    tensors and 0.0 means orthoganal tensors.
+    """
+    tensor1 = tensor1.to(device)
+    tensor2 = tensor2.to(device)
+    return F.cosine_similarity(tensor1, tensor2, dim=0).item()
 
 
 def evaluate_gre(model, adj_model, gre=None):
@@ -78,24 +85,23 @@ def evaluate_gre(model, adj_model, gre=None):
     right = []
     wrong = []
     for test in gre_data:
-        adj_str, options, ant = test
+        adj_str, options, answer = test
         adj = adj_model.adj_from_name(adj_str)
         gate = data.find_gate_vector(adj, adj_model)
 
         x, y = adj.embedding.to(device), gate.to(device)
-        adj_ant_pred = model(x, y)
+        ant_pred = model(x, y)
 
-        closest_dist = sys.maxsize
-        closest_word = ""
+        most_similar = 0
+        most_similar_word = ""
         for opt_str in options:
             opt = adj_model.adj_from_name(opt_str)
-            # prediction needs detach since torch can do numpy() when var requires grad
-            dist = compute_cosine(adj_ant_pred.detach(), opt.embedding)
-            if dist < closest_dist:
-                closest_dist = dist
-                closest_word = opt_str
+            similarity = compute_cosine(ant_pred, opt.embedding)
+            if similarity > most_similar:
+                most_similar = similarity
+                most_similar_word = opt_str
 
-        if closest_word == ant:
+        if most_similar_word == answer:
             right.append(test)
         else:
             wrong.append(test)
@@ -110,7 +116,7 @@ def main():
     start = time.time()
     dataset, adj_model = data.build_dataset_and_adj_model(restricted=False)
 
-    print("Built input/adj_model in %ds" % (time.time() - start))
+    print("Built dataset and adjectives in %ds" % (time.time() - start))
     data_loader = DataLoader(dataset=dataset, batch_size=BATCH_SIZE, shuffle=True)
     model = EncoderDecoder()
     # model.load_state_dict(torch.load(MODEL_PATH)
@@ -121,7 +127,7 @@ def main():
 
     model.to(device)
 
-    print("Training on: ", device)
+    print("Training on", device.upper())
     training_loop(model, data_loader, EPOCHS, adj_model)
     with torch.set_grad_enabled(False):
         evaluate_gre(model, adj_model)
