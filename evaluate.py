@@ -1,3 +1,11 @@
+"""
+Evaluation code for both Gold Standard and GRE Questions
+Examples:
+    python evaluate.py
+    python evaluate.py adjective_negation_model.tar
+    python evaluate.py adjective_negation_model.tar cpu
+    python evaluate.py adjective_negation_model.tar cuda
+"""
 import sys
 import torch
 import torch.nn as nn
@@ -6,7 +14,6 @@ import data
 import train
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 def compute_cosine(tensor1, tensor2, device=DEVICE):
     """
@@ -27,8 +34,9 @@ def predict_antonym_emb(model, adj_model, adj_str, device=DEVICE):
     adj = adj_model.adj_from_name(adj_str)
     gate = data.find_gate_vector(adj, adj_model)
 
-    x, y = adj.embedding.to(device), gate.to(device)
-    return model(x, y)
+    x, z = adj.embedding.to(device), gate.to(device)
+    y_pred = model(x, z)
+    return y_pred
 
 
 def evaluate_gre(model, adj_model, device=DEVICE, gre=None):
@@ -106,22 +114,25 @@ def evaluate(model, adj_model, device=DEVICE):
     print("Gold standard accuracy: %.2f" % gold_acc)
 
 
-def main(model_path):
+def main(model_path, device=DEVICE):
     """
     Loads the adj_model and EncoderDecoder model from a checkpoint.
     The EncoderDecoder model is then evaluated on both GRE question
     answer set and on the gold standard antonym prediction task.
     """
     adj_model = data.build_adj_model()
-    model, _optimizer = train.initialize_model(model_path, DEVICE)
+    model, _optimizer = train.initialize_model(model_path, device)
     model.eval()
-    evaluate(model, adj_model)
+    evaluate(model, adj_model, device)
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Expected path for model as argument")
         sys.exit(1)
-    else:
-        MODEL_PATH = sys.argv[1]
-        main(MODEL_PATH)
+    elif len(sys.argv) == 2:
+        main(sys.argv[1])
+    elif len(sys.argv) == 3:
+        device_type = sys.argv[2]
+        assert device_type in ["cpu", "cuda"]
+        main(sys.argv[1], torch.device(device_type))

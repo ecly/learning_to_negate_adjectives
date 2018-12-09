@@ -25,10 +25,13 @@ MODEL_PATH = "adjective_negation_model.tar"
 # DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEVICE = torch.device("cpu")
 
+
 def print_progress(start, epoch, batch, loss):
     """Print progress as <Epoch, Batch, Elapsed, Loss>"""
     elapsed = time.time() - start
-    print("Epoch %d, Batch %d, Elapsed: %ds, Loss: %.2f" % (epoch, batch, elapsed, loss))
+    print(
+        "Epoch %d, Batch %d, Elapsed: %ds, Loss: %.2f" % (epoch, batch, elapsed, loss)
+    )
 
 
 def training_loop(model, optimizer, data_loader, epochs=EPOCHS):
@@ -40,12 +43,7 @@ def training_loop(model, optimizer, data_loader, epochs=EPOCHS):
     for epoch in range(epochs):
         print("Epoch %d:" % epoch)
         for batch_idx, batch in enumerate(data_loader):
-            loss = train(
-                model,
-                optimizer,
-                loss_function,
-                batch
-            )
+            loss = train(model, optimizer, loss_function, batch)
             print_progress(start, epoch, batch_idx, loss)
 
 
@@ -77,7 +75,6 @@ def initialize_model(model_path=None, device=DEVICE):
     Returns (model, optimizer)
     """
     model = EncoderDecoder()
-    model.double() # use doubles since our input is doubles
     optimizer = optim.Adadelta(model.parameters(), rho=RHO)
     if model_path is not None:
         model = EncoderDecoder()
@@ -89,6 +86,7 @@ def initialize_model(model_path=None, device=DEVICE):
     if device.type == "cuda" and torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
 
+    model.double() #use doubles since our input is doubles
     model.to(device)
     return model, optimizer
 
@@ -109,10 +107,14 @@ def main():
         # Always save model
         print("Saving model to", MODEL_PATH)
         torch.save(
-            {"model_state_dict": model.state_dict(),
-             "optimizer_state_dict": optimizer.state_dict()}
-            , MODEL_PATH)
+            {
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+            },
+            MODEL_PATH,
+        )
         torch.cuda.empty_cache()
+
 
 if __name__ == "__main__":
     main()
