@@ -344,10 +344,8 @@ def build_dataset(adj_model=None, custom_filter=None, restricted=False):
 
 
 def main():
-    """Build model and print length of training triples"""
-    # Load the Google news pre-trained Word2Vec model
-    adj_model = build_adj_model()
-    dataset, _ = build_dataset(adj_model)
+    """Build model and print length of size of training set"""
+    dataset = build_dataset()
     print(len(dataset.data))
 
 
