@@ -93,6 +93,7 @@ class AdjectiveModel:
 
 
 class AdjectiveDataset(Dataset):
+    """General purpose pytorch Dataset"""
     def __init__(self, data):
         self.data = data
         self.len = len(data)
@@ -197,50 +198,6 @@ def build_adjective_dict(adj2emb):
     return word2adj
 
 
-def build_dataset(model, filtered=None, restricted=False):
-    """
-    Builds an AdjectiveDataset for the given model.
-    The model contains all the adjectives, and allows querying
-    for embeddings using antonym names.
-
-    Optionally takes an enumerable of filtered words from
-    which we filter triples where the input adjective is in that
-    enumerable.
-
-    An additional option `restricted` represents whether hyponyms
-    for a word in filtered should be filtered as well.
-    """
-    filtered = [] if filtered is None else filtered
-
-    if restricted:
-        for f in filtered:
-            if model.has_adj(f):
-                filter_adj = model.adj_from_name(f)
-                filtered = filtered | filter_adj.hyponyms
-
-    triples = []
-    for adj in model.adj2adj.values():
-        adj_name = adj.name
-        if adj.name in filtered:
-            continue
-
-        # if we should treat hyponyms as having same antonyms
-        # then below code should be integrated here
-        # for adj_name in adj.hyponyms | {adj.name}:
-        #     if adj_name in filtered or not model.has_adj(adj_name):
-        #         continue
-
-        current_adj = model.adj_from_name(adj_name)
-        adj_emb = current_adj.embedding
-        centroid = find_gate_vector(current_adj, model)
-
-        for ant_name in filter(model.has_adj, adj.antonyms):
-            ant_emb = model.adj_from_name(ant_name).embedding
-            triples.append((adj_emb, centroid, ant_emb))
-
-    return AdjectiveDataset(triples)
-
-
 def load_gre_filtered_words():
     """
     Loads and creates a set of the input words
@@ -297,8 +254,8 @@ def load_gold_standard(adj_model, gre_data=None):
 
     for adj, ants in data.items():
         if adj_model.has_adj(adj):
-            ants = adj_model.adj_from_name(adj).antonyms
-            ants.update(ants)
+            model_ants = adj_model.adj_from_name(adj).antonyms
+            ants.update(model_ants)
 
     return data
 
@@ -319,30 +276,74 @@ def load_adj2emb(path=ADJ2EBM_PATH):
         return adj2emb
 
 
-def build_dataset_and_adj_model(restricted=False):
+def build_filtered_words(adj_model):
+    """Builds a set of filtered words using GRE and Gold Standard"""
+    gre_filter = load_gre_filtered_words()
+    gold_standard = load_gold_standard(adj_model)
+    return gre_filter | set(gold_standard.keys())
+
+
+def build_adj_model():
     """
-    Simply access function running the entire Adjective Model
-    and training triple creation, including filtered based on GRE
-    all in one step.
-
-    Takes a parameter whether the filtering should be restricted
-    or not, as defined in Rimell 2018.
-
-    Returns a tuple with <AdjectiveDataset, AdjectiveModel>.
+    Builds the AdjectiveModel using embeddings at `ADJ2EMB_PATH`
+    as well as adjective/antonyms/hyponyms found from WordNet.
     """
     adj2emb = load_adj2emb(ADJ2EBM_PATH)
     adj2adj = build_adjective_dict(adj2emb)
-    adj_model = AdjectiveModel(adj2adj)
-    filtered_words = load_gre_filtered_words()
-    # gold_standard = load_gold_standard(adj_model)
-    dataset = build_dataset(adj_model, filtered_words, restricted)
-    return dataset, adj_model
+    return AdjectiveModel(adj2adj)
+
+
+def build_dataset(adj_model=None, custom_filter=None, restricted=False):
+    """
+    Builds an AdjectiveDataset for the given model.
+    The model contains all the adjectives, and allows querying
+    for embeddings using antonym names.
+
+    Optionally takes a custom enumerable of filtered words from
+    which we filter triples where the input adjective is in that
+    enumerable. If no custom_filter is used, the default combination
+    of words from GRE questions and Gold standard input words are used.
+
+    An additional option `restricted` represents whether hyponyms
+    for a word in filtered should be filtered as well.
+    """
+    adj_model = build_adj_model() if adj_model is None else adj_model
+    filtered = build_filtered_words(adj_model) if custom_filter is None else custom_filter
+
+    if restricted:
+        for f in filtered:
+            if adj_model.has_adj(f):
+                filter_adj = adj_model.adj_from_name(f)
+                filtered = filtered | filter_adj.hyponyms
+
+    triples = []
+    for adj in adj_model.adj2adj.values():
+        adj_name = adj.name
+        if adj.name in filtered:
+            continue
+
+        # if we should treat hyponyms as having same antonyms
+        # then below code should be integrated here
+        # for adj_name in adj.hyponyms | {adj.name}:
+        #     if adj_name in filtered or not model.has_adj(adj_name):
+        #         continue
+
+        current_adj = adj_model.adj_from_name(adj_name)
+        adj_emb = current_adj.embedding
+        centroid = find_gate_vector(current_adj, adj_model)
+
+        for ant_name in filter(adj_model.has_adj, adj.antonyms):
+            ant_emb = adj_model.adj_from_name(ant_name).embedding
+            triples.append((adj_emb, centroid, ant_emb))
+
+    return AdjectiveDataset(triples)
 
 
 def main():
     """Build model and print length of training triples"""
     # Load the Google news pre-trained Word2Vec model
-    dataset, _ = build_dataset_and_adj_model()
+    adj_model = build_adj_model()
+    dataset, _ = build_dataset(adj_model)
     print(len(dataset.data))
 
 
