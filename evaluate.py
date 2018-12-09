@@ -1,7 +1,6 @@
 """
 Evaluation code for both Gold Standard and GRE Questions
 Examples:
-    python evaluate.py
     python evaluate.py adjective_negation_model.tar
     python evaluate.py adjective_negation_model.tar cpu
     python evaluate.py adjective_negation_model.tar cuda
@@ -133,6 +132,6 @@ if __name__ == "__main__":
     elif len(sys.argv) == 2:
         main(sys.argv[1])
     elif len(sys.argv) == 3:
-        device_type = sys.argv[2]
-        assert device_type in ["cpu", "cuda"]
-        main(sys.argv[1], torch.device(device_type))
+        device = sys.argv[2].lower()
+        assert device in ["cpu", "cuda"]
+        main(sys.argv[1], torch.device(device))

@@ -325,8 +325,9 @@ def build_dataset(adj_model=None, custom_filter=None, restricted=False):
         if adj.name in filtered:
             continue
 
-        # if we should treat hyponyms as having same antonyms
-        # then below code should be integrated here
+        # NOTE: If we should treat hyponyms as having same antonyms
+        # then below code should be integrated here:
+        #
         # for adj_name in adj.hyponyms | {adj.name}:
         #     if adj_name in filtered or not model.has_adj(adj_name):
         #         continue

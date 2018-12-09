@@ -22,8 +22,7 @@ RHO = 0.95
 BATCH_SIZE = 48
 EPOCHS = 200
 MODEL_PATH = "adjective_negation_model.tar"
-# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-DEVICE = torch.device("cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def print_progress(start, epoch, batch, loss):
@@ -117,4 +116,9 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 2:
+        device = sys.argv[1].lower()
+        assert device in ["cpu", "cuda"]
+        DEVICE = torch.device(device)
+
     main()
