@@ -220,17 +220,23 @@ def build_dataset(model, filtered=None, restricted=False):
 
     triples = []
     for adj in model.adj2adj.values():
-        for adj_name in adj.hyponyms | {adj.name}:
-            if adj_name in filtered or not model.has_adj(adj_name):
-                continue
+        adj_name = adj.name
+        if adj.name in filtered:
+            continue
 
-            current_adj = model.adj_from_name(adj_name)
-            adj_emb = current_adj.embedding
-            centroid = find_gate_vector(current_adj, model)
+        # if we should treat hyponyms as having same antonyms
+        # then below code should be integrated here
+        # for adj_name in adj.hyponyms | {adj.name}:
+        #     if adj_name in filtered or not model.has_adj(adj_name):
+        #         continue
 
-            for ant_name in filter(model.has_adj, adj.antonyms):
-                ant_emb = model.adj_from_name(ant_name).embedding
-                triples.append((adj_emb, centroid, ant_emb))
+        current_adj = model.adj_from_name(adj_name)
+        adj_emb = current_adj.embedding
+        centroid = find_gate_vector(current_adj, model)
+
+        for ant_name in filter(model.has_adj, adj.antonyms):
+            ant_emb = model.adj_from_name(ant_name).embedding
+            triples.append((adj_emb, centroid, ant_emb))
 
     return AdjectiveDataset(triples)
 

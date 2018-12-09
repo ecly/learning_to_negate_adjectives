@@ -91,7 +91,6 @@ def evaluate_gre(model, adj_model, gre=None):
             opt = adj_model.adj_from_name(opt_str)
             # prediction needs detach since torch can do numpy() when var requires grad
             dist = compute_cosine(adj_ant_pred.detach(), opt.embedding)
-            print(dist)
             if dist < closest_dist:
                 closest_dist = dist
                 closest_word = opt_str
