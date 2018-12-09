@@ -1,9 +1,13 @@
 """
 Module for loading/saving/training a adjective negation model.
 Also includes evaluation code.
+
+Requires ~7GB of either CUDA or regular Memory depending
+on the device used for training.
 """
 import time
 import sys
+import os.path
 
 import torch
 import torch.nn as nn
@@ -17,7 +21,7 @@ import data
 RHO = 0.95
 BATCH_SIZE = 48
 EPOCHS = 200
-MODEL_PATH = "adjective_negation_model"
+MODEL_PATH = "adjective_negation_model.tar"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def print_progress(start, epoch, batch, loss):
@@ -26,14 +30,14 @@ def print_progress(start, epoch, batch, loss):
     print("Epoch %d, Batch %d, Elapsed: %ds, Loss: %.2f" % (epoch, batch, elapsed, loss))
 
 
-def training_loop(model, data_loader, epochs, adj_model):
+def training_loop(model, optimizer, data_loader, epochs, adj_model):
     """Training loop, running for given amount of iterations on given triples"""
     optimizer = optim.Adadelta(model.parameters(), rho=RHO)
     loss_function = nn.MSELoss()
     start = time.time()
 
     for epoch in range(epochs):
-        print("Epoch %d:" % epoch")
+        print("Epoch %d:" % epoch)
         with torch.set_grad_enabled(False):
             evaluate_gre(model, adj_model)
         for batch_idx, batch in enumerate(data_loader):
@@ -114,26 +118,40 @@ def evaluate_gre(model, adj_model, gre=None):
 def main():
     """Build dataset and train model"""
     start = time.time()
+    print("Building dataset and adjectives")
     dataset, adj_model = data.build_dataset_and_adj_model(restricted=False)
-
-    print("Built dataset and adjectives in %ds" % (time.time() - start))
     data_loader = DataLoader(dataset=dataset, batch_size=BATCH_SIZE, shuffle=True)
+    print("Built dataset and adjectives in %ds" % (time.time() - start))
+
     model = EncoderDecoder()
-    # model.load_state_dict(torch.load(MODEL_PATH)
-    # make model use doubles since our input is doubles
-    model.double()
-    if device == "cuda" and torch.cuda.device_count() > 1:
+    model.double() # use doubles since our input is doubles
+    optimizer = optim.Adadelta(model.parameters(), rho=RHO)
+
+    # if a model exists, load that one
+    if os.path.isfile(MODEL_PATH):
+        print("Loading model from", MODEL_PATH)
+        checkpoint = torch.load(MODEL_PATH, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+    if device.type == "cuda" and torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
 
     model.to(device)
 
-    print("Training on", device.upper())
-    training_loop(model, data_loader, EPOCHS, adj_model)
-    with torch.set_grad_enabled(False):
-        evaluate_gre(model, adj_model)
-    torch.save(model.state_dict(), MODEL_PATH)
-    torch.cuda.empty_cache()
-
+    try:
+        print("Training on", device.type.upper())
+        training_loop(model, optimizer, data_loader, EPOCHS, adj_model)
+        with torch.set_grad_enabled(False):
+            evaluate_gre(model, adj_model)
+    finally:
+        # Always save model
+        print("Saving model to", MODEL_PATH)
+        torch.save(
+            {"model_state_dict": model.state_dict(),
+             "optimizer_state_dict": optimizer.state_dict()}
+            , MODEL_PATH)
+        torch.cuda.empty_cache()
 
 if __name__ == "__main__":
     main()

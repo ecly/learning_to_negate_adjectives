@@ -7,6 +7,11 @@ HIDDEN_SIZE = 600
 EMBEDDING_SIZE = 300
 
 class EncoderDecoder(nn.Module):
+    """
+    Combination of Encoder and Decoder.
+    Produces a predicted antonym y, given and
+    adjective x and a gate vector z.
+    """
     def __init__(self, hidden_size=HIDDEN_SIZE, embedding_size=EMBEDDING_SIZE):
         super(EncoderDecoder, self).__init__()
         self.encoder = Encoder(hidden_size, embedding_size)
@@ -18,6 +23,7 @@ class EncoderDecoder(nn.Module):
 
 
 class Encoder(nn.Module):
+    """Encoder producing hidden state h given adjective x and gate z"""
     def __init__(self, hidden_size=HIDDEN_SIZE, embedding_size=EMBEDDING_SIZE):
         super(Encoder, self).__init__()
         self.hidden_size = hidden_size
@@ -29,6 +35,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
+    """Deocder predicting antonym y given adjective x and hidden state h"""
     def __init__(self, hidden_size=HIDDEN_SIZE, embedding_size=EMBEDDING_SIZE):
         super(Decoder, self).__init__()
         self.hidden_size = hidden_size
