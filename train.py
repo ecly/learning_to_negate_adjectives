@@ -15,7 +15,6 @@ from torch.utils.data import DataLoader
 from torch import optim
 
 from model import EncoderDecoder
-import evaluate
 import data
 
 RHO = 0.95
@@ -75,7 +74,7 @@ def initialize_model(model_path=None, device=DEVICE):
     """
     model = EncoderDecoder()
     optimizer = optim.Adadelta(model.parameters(), rho=RHO)
-    if model_path is not None:
+    if model_path is not None and os.path.isfile(model_path):
         model = EncoderDecoder()
         print("Loading model from", model_path)
         checkpoint = torch.load(model_path, map_location=device)
@@ -90,14 +89,14 @@ def initialize_model(model_path=None, device=DEVICE):
     return model, optimizer
 
 
-def main():
+def main(device=DEVICE):
     """Build dataset and train model"""
     start = time.time()
     print("Building dataset and adjectives")
     dataset = data.build_dataset(restricted=False)
     data_loader = DataLoader(dataset=dataset, batch_size=BATCH_SIZE, shuffle=True)
     print("Built dataset and adjectives in %ds" % (time.time() - start))
-    model, optimizer = initialize_model(MODEL_PATH)
+    model, optimizer = initialize_model(MODEL_PATH, device)
 
     try:
         print("Training on", DEVICE.type.upper())
@@ -121,4 +120,4 @@ if __name__ == "__main__":
         assert device_type in ["cpu", "cuda"]
         DEVICE = torch.device(device_type)
 
-    main()
+    main(DEVICE)
