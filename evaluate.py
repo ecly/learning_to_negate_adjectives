@@ -4,8 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import data
 import train
-# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-DEVICE = torch.device("cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def compute_cosine(tensor1, tensor2, device=DEVICE):
     """
@@ -18,6 +17,18 @@ def compute_cosine(tensor1, tensor2, device=DEVICE):
     return F.cosine_similarity(tensor1, tensor2, dim=0).item()
 
 
+def predict_antonym_emb(model, adj_model, adj_str, device=DEVICE):
+    """
+    Predicts an antonym embedding using the given model, and adj_model
+    to lookup the embedding for the given adj_str.
+    """
+    adj = adj_model.adj_from_name(adj_str)
+    gate = data.find_gate_vector(adj, adj_model)
+
+    x, y = adj.embedding.to(device), gate.to(device)
+    return(model(x, y))
+
+
 def evaluate_gre(model, adj_model, device=DEVICE, gre=None):
     """
     Evaluate the given model according to GRE
@@ -27,33 +38,29 @@ def evaluate_gre(model, adj_model, device=DEVICE, gre=None):
     Optionally takes a loaded GRE dataset to avoid loading
     multiple times, if evaluation is ran repeatedly.
     """
-    gre_data = data.load_gre_test_set(adj_model) if gre is None else gre
-    right = []
-    wrong = []
-    for test in gre_data:
-        adj_str, options, answer = test
-        adj = adj_model.adj_from_name(adj_str)
-        gate = data.find_gate_vector(adj, adj_model)
+    with torch.set_grad_enabled(False):
+        gre_data = data.load_gre_test_set(adj_model) if gre is None else gre
+        right = []
+        wrong = []
+        for test in gre_data:
+            adj_str, options, answer = test
+            ant_pred = predict_antonym_emb(model, adj_model, adj_str, device)
 
-        x, y = adj.embedding.to(device), gate.to(device)
-        ant_pred = model(x, y)
+            most_similar = 0
+            most_similar_word = ""
+            for opt_str in options:
+                opt = adj_model.adj_from_name(opt_str)
+                similarity = compute_cosine(ant_pred, opt.embedding)
+                if similarity > most_similar:
+                    most_similar = similarity
+                    most_similar_word = opt_str
 
-        most_similar = 0
-        most_similar_word = ""
-        for opt_str in options:
-            opt = adj_model.adj_from_name(opt_str)
-            similarity = compute_cosine(ant_pred, opt.embedding)
-            if similarity > most_similar:
-                most_similar = similarity
-                most_similar_word = opt_str
+            if most_similar_word == answer:
+                right.append(test)
+            else:
+                wrong.append(test)
 
-        if most_similar_word == answer:
-            right.append(test)
-        else:
-            wrong.append(test)
-
-
-    return right, wrong
+        return right, wrong
 
 def evaluate_gold_standard(model, adj_model, device=DEVICE, gold=None):
     """
@@ -61,21 +68,21 @@ def evaluate_gold_standard(model, adj_model, device=DEVICE, gold=None):
     The given adj_model is needed to compute embeddings for
     the gold standard adjectives.
     """
-    gold_data = data.load_gold_standard(adj_model) if gold is None else gold
-    right = []
-    wrong = []
-    for adj_str, antonyms in gold_data.items():
-        adj = adj_model.adj_from_name(adj_str)
-        gate = data.find_gate_vector(adj, adj_model)
-        x, y = adj.embedding.to(device), gate.to(device)
-        ant_pred = model(x, y)
-        ant_name = adj_model.adj_from_vector(ant_pred).name
-        if ant_name in antonyms:
-            right.append((adj_str, ant_name))
-        else:
-            wrong.append((adj_str, ant_name))
+    with torch.set_grad_enabled(False):
+        gold_data = data.load_gold_standard(adj_model) if gold is None else gold
+        right = []
+        wrong = []
+        for adj_str, antonyms in gold_data.items():
+            ant_pred = predict_antonym_emb(model, adj_model, adj_str, device)
+            ant_name = adj_model.adj_from_vector(ant_pred).name
+            if ant_name in antonyms:
+                # print("Correct: %s %s" %(adj_str, ant_name))
+                right.append((adj_str, ant_name))
+            else:
+                # print("Wrong: %s %s" %(adj_str, ant_name))
+                wrong.append((adj_str, ant_name))
 
-    return right, wrong
+        return right, wrong
 
 
 def evaluate(model, adj_model, device=DEVICE):
@@ -83,16 +90,15 @@ def evaluate(model, adj_model, device=DEVICE):
     Evaluates the given model on both GRE 5 option questions
     and on the gold standard. Results are printed to stdout.
     """
-    with torch.set_grad_enabled(False):
-        gre_data = data.load_gre_test_set(adj_model)
-        gre_right, _gre_wrong = evaluate_gre(model, adj_model, device, gre_data)
-        gre_acc = len(gre_right) / len(gre_data)
-        print("GRE question accuracy: %.2f" % gre_acc)
+    gre_data = data.load_gre_test_set(adj_model)
+    gre_right, _gre_wrong = evaluate_gre(model, adj_model, device, gre_data)
+    gre_acc = len(gre_right) / len(gre_data)
+    print("GRE question accuracy: %.2f" % gre_acc)
 
-        gold_data = data.load_gold_standard(adj_model)
-        gold_right, _gold_wrong = evaluate_gold_standard(model, adj_model, device, gold_data)
-        gold_acc = len(gold_right) / len(gold_data)
-        print("Gold standard accuracy: %.2f" % gold_acc)
+    gold_data = data.load_gold_standard(adj_model)
+    gold_right, _gold_wrong = evaluate_gold_standard(model, adj_model, device, gold_data)
+    gold_acc = len(gold_right) / len(gold_data)
+    print("Gold standard accuracy: %.2f" % gold_acc)
 
 
 def main(model_path):
