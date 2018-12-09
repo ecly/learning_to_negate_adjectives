@@ -182,6 +182,9 @@ def build_adjective_dict(adj2emb):
 
         for word in synset.lemmas():
             word_name = word.name()
+            # skip words we don't have embeddings for
+            if word_name not in adj2emb:
+                continue
 
             if word_name not in word2adj and word_name in adj2emb:
                 embedding = torch.from_numpy(adj2emb[word_name])
