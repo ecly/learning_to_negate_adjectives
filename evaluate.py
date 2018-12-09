@@ -4,7 +4,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import data
 import train
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def compute_cosine(tensor1, tensor2, device=DEVICE):
     """
@@ -26,7 +28,7 @@ def predict_antonym_emb(model, adj_model, adj_str, device=DEVICE):
     gate = data.find_gate_vector(adj, adj_model)
 
     x, y = adj.embedding.to(device), gate.to(device)
-    return(model(x, y))
+    return model(x, y)
 
 
 def evaluate_gre(model, adj_model, device=DEVICE, gre=None):
@@ -62,6 +64,7 @@ def evaluate_gre(model, adj_model, device=DEVICE, gre=None):
 
         return right, wrong
 
+
 def evaluate_gold_standard(model, adj_model, device=DEVICE, gold=None):
     """
     Evaluate the given model according to the gold standard.
@@ -96,7 +99,9 @@ def evaluate(model, adj_model, device=DEVICE):
     print("GRE question accuracy: %.2f" % gre_acc)
 
     gold_data = data.load_gold_standard(adj_model)
-    gold_right, _gold_wrong = evaluate_gold_standard(model, adj_model, device, gold_data)
+    gold_right, _gold_wrong = evaluate_gold_standard(
+        model, adj_model, device, gold_data
+    )
     gold_acc = len(gold_right) / len(gold_data)
     print("Gold standard accuracy: %.2f" % gold_acc)
 
@@ -112,7 +117,8 @@ def main(model_path):
     model.eval()
     evaluate(model, adj_model)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Expected path for model as argument")
         sys.exit(1)

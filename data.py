@@ -94,6 +94,7 @@ class AdjectiveModel:
 
 class AdjectiveDataset(Dataset):
     """General purpose pytorch Dataset"""
+
     def __init__(self, data):
         self.data = data
         self.len = len(data)
@@ -225,7 +226,7 @@ def load_gre_test_set(adj_model):
             adj, rest = line.strip().split(": ", 1)
             opt_str, answer = rest.split(" :: ")
             options = opt_str.split()
-            #only keep questions where we know all words
+            # only keep questions where we know all words
             if all(adj_model.has_adj(x) for x in options + [adj, answer]):
                 test_data.append((adj, options, answer))
 
@@ -308,7 +309,9 @@ def build_dataset(adj_model=None, custom_filter=None, restricted=False):
     for a word in filtered should be filtered as well.
     """
     adj_model = build_adj_model() if adj_model is None else adj_model
-    filtered = build_filtered_words(adj_model) if custom_filter is None else custom_filter
+    filtered = (
+        build_filtered_words(adj_model) if custom_filter is None else custom_filter
+    )
 
     if restricted:
         for f in filtered:
