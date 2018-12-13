@@ -21,12 +21,17 @@ def main(model_path, tests):
     model, _optimizer = train.initialize_model(model_path)
     with torch.set_grad_enabled(False):
         for test in tests:
+            if test not in gold_standard:
+                print("%s not in gold standard. Skipping" % test)
+                continue
+
             print("Predictions for %s:" % test)
+            gold_antonyms = gold_standard[test]
             ant_pred = predict_antonym_emb(model, adj_model, test)
             predictions = [a.name for a in adj_model.adjs_from_vector(ant_pred, count=5)]
             output = []
             for prediction in predictions:
-                if prediction in gold_standard:
+                if prediction in gold_antonyms:
                     output.append("[%s]" % prediction)
                 else:
                     output.append("%s" % prediction)
