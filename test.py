@@ -36,5 +36,6 @@ def main(model_path, tests):
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Expected model path as command line argument")
+        sys.exit(1)
 
     main(sys.argv[1], TESTS + [test.lower() for test in sys.argv[2:]])
