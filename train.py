@@ -67,15 +67,13 @@ def initialize_model(model_path=None, device=DEVICE):
     model as well as state_dict for optimizer are loaded in.
 
     If the a device is given, model will be moved to the given
-    device. If device is 'cuda' and multiple devices are given,
-    the model will be wrapped in DataParallel
+    device. Model will always be wrapped in `nn.DataParallel` for
+    consistency when loading models across devices. This can however
+    be a slowdown when running in single device environments.
 
     Returns (model, optimizer)
     """
-    model = EncoderDecoder()
-    if device.type == "cuda" and torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
-
+    model = nn.DataParallel(EncoderDecoder())
     optimizer = optim.Adadelta(model.parameters(), rho=RHO)
 
     if model_path is not None and os.path.isfile(model_path):
