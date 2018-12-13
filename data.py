@@ -4,6 +4,10 @@ Logic for building the data using NLTK and the binary of Google's
 
 The pre-trained embeddings can be downloaded here:
 https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
+
+This also included logic for the variations of the model in the
+form of `restricted` and `unsupervised`. Both of these are present
+as parameters to `build_dataset`.
 """
 from collections import defaultdict
 import torch
@@ -14,8 +18,8 @@ import numpy as np
 
 CENTROID_MIN_BASIS = 10
 ANTONYM_THESAURUS = "./test/thesaurus_antonyms_extended"
-LB_GOLD_STANDRD = "./test/lb.inputwords"
-GRE_FILTERED_WORDS = "./test/gre_test_adjs_inputwords.txt"
+LB_INPUT_WORDS = "./test/lb.inputwords"
+GRE_INPUT_WORDS = "./test/gre_test_adjs_inputwords.txt"
 GRE_TEST_QUESTIONS = "./test/gre_testset_adjs.txt"
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
 ADJ2EBM_PATH = "./adj_emb.tsv"
@@ -70,11 +74,30 @@ class AdjectiveModel:
         return self.adj2adj[name]
 
     def adj_from_vector(self, vector):
-        """Get an Adjective from pytorch tensor embedding"""
+        """
+        Get a single Adjective from a pytorch tensor embedding
+        This is done by finding the nearest known adjective embedding
+        to the given tensor and looking up its corresponding Adjective.
+
+        Returns a one best Adjective instance.
+        """
         neighbors = self.knn.kneighbors(
             vector.cpu().numpy().reshape(1, -1), n_neighbors=1, return_distance=False
         )
         return self.emb2adj[self.tensors[neighbors[0][0]]]
+
+    def adjs_from_vector(self, vector, count=5):
+        """
+        Get `count` adjectives from a pytorch tensor embedding.
+        This is represented as the `count` nearest known adjectives for the given
+        vector, represented as Adjective instances.
+
+        Returns a list of Adjective instances.
+        """
+        neighbors = self.knn.kneighbors(
+            vector.cpu().numpy().reshape(1, -1), n_neighbors=count, return_distance=False
+        )
+        return list(map(lambda emb: self.emb2adj[emb], map(lambda nn: self.tensors[nn], neighbors[0])))
 
     def has_adj(self, name):
         """Returns True if given adj is known to model otherwise False"""
@@ -116,12 +139,17 @@ def calc_centroid(matrix):
     return torch.mean(matrix, dim=0)
 
 
-def find_gate_vector(adj, model):
+def find_gate_vector(adj, model, unsupervised=False):
     """
     Finds a gate vector for an adjective using the given model.
+
+    If unsupervised=True is given, we ignore hyponyms from WordNet
+    and instead only use nearest neighbors to create the gate vector.
+
+    Otherwise we prioritize these over nearest neighbors from vector space.
     """
-    hyp_count = len(adj.hyponyms)
-    hyp_emb = list(
+    hyp_count = 0 if unsupervised else len(adj.hyponyms)
+    hyp_emb = [] if unsupervised else list(
         map(
             lambda a: model.adj_from_name(a).embedding,
             filter(model.has_adj, adj.hyponyms),
@@ -199,12 +227,12 @@ def build_adjective_dict(adj2emb):
     return word2adj
 
 
-def load_gre_filtered_words():
+def load_gre_words():
     """
     Loads and creates a set of the input words
     for the GRE test set.
     """
-    with open(GRE_FILTERED_WORDS, "r") as f:
+    with open(GRE_INPUT_WORDS, "r") as f:
         words = set()
         for word in f:
             words.add(word.strip().lower())
@@ -223,7 +251,7 @@ def load_gre_test_set(adj_model):
     with open(GRE_TEST_QUESTIONS, "r") as f:
         test_data = []
         for line in f:
-            adj, rest = line.strip().split(": ", 1)
+            adj, rest = line.strip().lower().split(": ", 1)
             opt_str, answer = rest.split(" :: ")
             options = opt_str.split()
             # only keep questions where we know all words
@@ -233,23 +261,29 @@ def load_gre_test_set(adj_model):
         return test_data
 
 
-def load_gold_standard(adj_model, gre_data=None):
-    """
-    Loads and creates a dictionary mapping the 99 LB adjectives
-    to a list of their 'gold standard' antonyms.
-    """
-    gre_data = [] if gre_data is None else gre_data
-    data = defaultdict(set)
-    with open(LB_GOLD_STANDRD, "r") as f:
+def load_lb_words(path=LB_INPUT_WORDS):
+    """Returns a list of the LB input words as strings"""
+    words = []
+    with open(path, "r") as f:
         for word in f:
-            data[word.strip()] = set()
+            words.append(word.strip().lower())
 
+    return words
+
+
+def load_gold_standard(adj_model):
+    """
+    Loads and creates a gold standard by combining the known antonyms
+    based on WordNet, GRE and adjectives from Roget's 21st Century Thesaurus.
+    Returns a dictionary from adjectives to a set of known antonyms.
+    """
+    data = defaultdict(set)
     with open(ANTONYM_THESAURUS, "r") as f:
         for line in f:
-            adj, ant = line.strip().split(" ", 1)
-            if adj in data:
-                data[adj].add(ant)
+            adj, ant = line.strip().lower().split(" ", 1)
+            data[adj].add(ant)
 
+    gre_data = load_gre_test_set(adj_model)
     for adj, _, answer in gre_data:
         data[adj].add(answer)
 
@@ -279,7 +313,7 @@ def load_adj2emb(path=ADJ2EBM_PATH):
 
 def build_filtered_words(adj_model):
     """Builds a set of filtered words using GRE and Gold Standard"""
-    gre_filter = load_gre_filtered_words()
+    gre_filter = load_gre_words()
     gold_standard = load_gold_standard(adj_model)
     return gre_filter | set(gold_standard.keys())
 
@@ -294,7 +328,7 @@ def build_adj_model():
     return AdjectiveModel(adj2adj)
 
 
-def build_dataset(adj_model=None, custom_filter=None, restricted=False):
+def build_dataset(adj_model=None, custom_filter=None, restricted=False, unsupervised=False):
     """
     Builds an AdjectiveDataset for the given model.
     The model contains all the adjectives, and allows querying
@@ -305,8 +339,11 @@ def build_dataset(adj_model=None, custom_filter=None, restricted=False):
     enumerable. If no custom_filter is used, the default combination
     of words from GRE questions and Gold standard input words are used.
 
-    An additional option `restricted` represents whether hyponyms
-    for a word in filtered should be filtered as well.
+    Option `restricted` represents whether hyponyms for a word in filtered
+    should be filtered as well.
+
+    Option `unsupervised` indicates whether WordNet hyponyms should be included
+    when calculating the gate vector.
     """
     adj_model = build_adj_model() if adj_model is None else adj_model
     filtered = (
@@ -326,7 +363,10 @@ def build_dataset(adj_model=None, custom_filter=None, restricted=False):
             continue
 
         # NOTE: If we should treat hyponyms as having same antonyms
-        # then below code should be integrated here:
+        # then below code should be integrated here. This was somewhat
+        # unclear in original paper, but this results an amount of
+        # training pairs far beyond that of the paper, hence
+        # this piece of code is commented out by default.
         #
         # for adj_name in adj.hyponyms | {adj.name}:
         #     if adj_name in filtered or not model.has_adj(adj_name):
@@ -334,7 +374,7 @@ def build_dataset(adj_model=None, custom_filter=None, restricted=False):
 
         current_adj = adj_model.adj_from_name(adj_name)
         adj_emb = current_adj.embedding
-        centroid = find_gate_vector(current_adj, adj_model)
+        centroid = find_gate_vector(current_adj, adj_model, unsupervised)
 
         for ant_name in filter(adj_model.has_adj, adj.antonyms):
             ant_emb = adj_model.adj_from_name(ant_name).embedding

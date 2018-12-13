@@ -7,7 +7,6 @@ Examples:
 """
 import sys
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import data
 import train
@@ -50,8 +49,7 @@ def evaluate_gre(model, adj_model, device=DEVICE, gre=None):
     """
     with torch.set_grad_enabled(False):
         gre_data = data.load_gre_test_set(adj_model) if gre is None else gre
-        right = []
-        wrong = []
+        right, wrong = [], []
         for test in gre_data:
             adj_str, options, answer = test
             ant_pred = predict_antonym_emb(model, adj_model, adj_str, device)
@@ -73,25 +71,70 @@ def evaluate_gre(model, adj_model, device=DEVICE, gre=None):
         return right, wrong
 
 
-def evaluate_gold_standard(model, adj_model, device=DEVICE, gold=None):
+def evaluate_gold_standard_p1(input_words, model, adj_model, device=DEVICE, gold=None):
     """
-    Evaluate the given model according to the gold standard.
-    The given adj_model is needed to compute embeddings for
-    the gold standard adjectives.
+    Evaluate the given model and input_words according to the gold standard.
+    input_words is a list of strings, which are the ones that will
+    have their antonym predicted to be evaluated against the gold standard.
+
+    Here we predict a one best antonym and checks whether it is present in
+    the gold standard. If an input word is given that we don't have embeddings
+    for, it it skipped.
+
+    The given adj_model is needed to compute embeddings for the input_words.
+    The model is used for prediction. Optionally takes the gold standard as
+    an input to avoid loading it multiple times under some circumstances.
+
+    Returns two lists with right and wrong predictions respectively.
     """
     with torch.set_grad_enabled(False):
-        gold_data = data.load_gold_standard(adj_model) if gold is None else gold
-        right = []
-        wrong = []
-        for adj_str, antonyms in gold_data.items():
+        gold = data.load_gold_standard(adj_model) if gold is None else gold
+        right, wrong = [], []
+        for adj_str in filter(adj_model.has_adj, input_words):
+            antonyms = gold[adj_str]
             ant_pred = predict_antonym_emb(model, adj_model, adj_str, device)
             ant_name = adj_model.adj_from_vector(ant_pred).name
             if ant_name in antonyms:
-                # print("Correct: %s %s" %(adj_str, ant_name))
                 right.append((adj_str, ant_name))
             else:
-                # print("Wrong: %s %s" %(adj_str, ant_name))
                 wrong.append((adj_str, ant_name))
+
+        return right, wrong
+
+
+def evaluate_gold_standard_p5(input_words, model, adj_model, device=DEVICE, gold=None):
+    """
+    Evaluate the given model and input_words according to the gold standard.
+    input_words is a list of strings, which are the ones that will
+    have their antonym predicted to be evaluated against the gold standard.
+
+    The given adj_model is needed to compute embeddings for the input_words.
+    The model is used for prediction. Optionally takes the gold standard as
+    an input to avoid loading it multiple times under some circumstances.
+
+    Returns two lists with right and wrong predictions respectively.
+    """
+    with torch.set_grad_enabled(False):
+        gold = data.load_gold_standard(adj_model) if gold is None else gold
+        right, wrong = [], []
+        for adj_str in filter(adj_model.has_adj, input_words):
+            antonyms = gold[adj_str]
+            ant_pred = predict_antonym_emb(model, adj_model, adj_str, device)
+            p5_antonyms = {
+                a.name for a in adj_model.adjs_from_vector(ant_pred, count=5)
+            }
+            good, bad = [], []
+            for ant in p5_antonyms:
+                if ant in antonyms:
+                    good.append(ant)
+                else:
+                    bad.append(ant)
+
+            result_pair = (adj_str, good, bad)
+            if len(good) >= 2:
+                right.append(result_pair)
+            else:
+                wrong.append(result_pair)
 
         return right, wrong
 
@@ -101,17 +144,40 @@ def evaluate(model, adj_model, device=DEVICE):
     Evaluates the given model on both GRE 5 option questions
     and on the gold standard. Results are printed to stdout.
     """
+    # Experiment 1: GRE Question, 5 Options
     gre_data = data.load_gre_test_set(adj_model)
-    gre_right, _gre_wrong = evaluate_gre(model, adj_model, device, gre_data)
-    gre_acc = len(gre_right) / len(gre_data)
+    gre_right, gre_wrong = evaluate_gre(model, adj_model, device, gre_data)
+    gre_acc = len(gre_right) / (len(gre_right) + len(gre_wrong))
     print("GRE question accuracy: %.2f" % gre_acc)
 
+    # Experiment 2: Gre P1/P5 Gold standard
     gold_data = data.load_gold_standard(adj_model)
-    gold_right, _gold_wrong = evaluate_gold_standard(
-        model, adj_model, device, gold_data
+    gre_words = data.load_gre_words()
+    gre_right_p1, gre_wrong_p1 = evaluate_gold_standard_p1(
+        gre_words, model, adj_model, device, gold_data
     )
-    gold_acc = len(gold_right) / len(gold_data)
-    print("Gold standard accuracy: %.2f" % gold_acc)
+    gre_acc_p1 = len(gre_right_p1) / (len(gre_right_p1) + len(gre_wrong_p1))
+    print("GRE P1 accuracy: %.2f" % gre_acc_p1)
+
+    gre_right_p5, gre_wrong_p5 = evaluate_gold_standard_p5(
+        gre_words, model, adj_model, device, gold_data
+    )
+    gre_acc_p5 = len(gre_right_p5) / (len(gre_right_p5) + len(gre_wrong_p5))
+    print("GRE P5 accuracy: %.2f" % gre_acc_p5)
+
+    # Experiment 2: LB P1/P5 Gold standard
+    lb_words = data.load_lb_words()
+    lb_right_p1, lb_wrong_p1 = evaluate_gold_standard_p1(
+        lb_words, model, adj_model, device, gold_data
+    )
+    lb_acc_p1 = len(lb_right_p1) / (len(lb_right_p1) + len(lb_wrong_p1))
+    print("LB P1 accuracy: %.2f" % lb_acc_p1)
+
+    lb_right_p5, lb_wrong_p5 = evaluate_gold_standard_p5(
+        lb_words, model, adj_model, device, gold_data
+    )
+    lb_acc_p5 = len(lb_right_p5) / (len(lb_right_p5) + len(lb_wrong_p5))
+    print("LB P5 accuracy: %.2f" % lb_acc_p5)
 
 
 def main(model_path, device=DEVICE):
