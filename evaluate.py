@@ -13,6 +13,12 @@ import train
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# In the original paper they say that several of the antonym
+# predictions for P5 should be in the gold standard. According
+# to merriam webster, several is more 2 and less than many, so
+# we will use 3 or more correct predictions as a correct prediction.
+SEVERAL = 3
+
 
 def compute_cosine(tensor1, tensor2, device=DEVICE):
     """
@@ -131,7 +137,7 @@ def evaluate_gold_standard_p5(input_words, model, adj_model, device=DEVICE, gold
                     bad.append(ant)
 
             result_pair = (adj_str, good, bad)
-            if len(good) >= 2:
+            if len(good) >= SEVERAL:
                 right.append(result_pair)
             else:
                 wrong.append(result_pair)
