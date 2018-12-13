@@ -73,16 +73,17 @@ def initialize_model(model_path=None, device=DEVICE):
     Returns (model, optimizer)
     """
     model = EncoderDecoder()
+    if device.type == "cuda" and torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+
     optimizer = optim.Adadelta(model.parameters(), rho=RHO)
+
     if model_path is not None and os.path.isfile(model_path):
-        model = EncoderDecoder()
         print("Loading model from", model_path)
         checkpoint = torch.load(model_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-    if device.type == "cuda" and torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
 
     model.double()  # use doubles since our input is doubles
     model.to(device)
