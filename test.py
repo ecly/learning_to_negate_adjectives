@@ -28,10 +28,10 @@ def main(model_path, tests):
     with torch.set_grad_enabled(False):
         for test in tests:
             if test not in gold_standard:
-                print("%s not in gold standard. Skipping" % test)
+                print("'%s' not in gold standard. Skipping" % test)
                 continue
 
-            print("Antonym predictions for %s:" % test)
+            print("Antonym predictions for '%s':" % test)
             gold_antonyms = gold_standard[test]
             ant_pred = predict_antonym_emb(model, adj_model, test)
             predictions = [a.name for a in adj_model.adjs_from_vector(ant_pred, count=5)]
@@ -50,4 +50,5 @@ if __name__ == '__main__':
         sys.exit(1)
 
     assert os.path.isfile(sys.argv[1])
-    main(sys.argv[1], [test.lower() for test in sys.argv[2:]])
+    TESTS = TESTS if len(sys.argv) == 2 else [s.lower() for s in sys.argv[2:]]
+    main(sys.argv[1], TESTS)
