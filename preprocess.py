@@ -6,6 +6,11 @@ word2vec model.
 
 The GogleNews word2vec embeddings can be downloaded here:
 https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
+
+Examples:
+    python preprocess.py
+    python preprocess.py GoogleNews-vectors-negative300.bin
+    python preprocess.py GoogleNewsVectors.bin adjective_embeddings.tsv
 """
 import sys
 import gensim
