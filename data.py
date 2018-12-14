@@ -92,9 +92,16 @@ class AdjectiveModel:
         Returns a list of Adjective instances.
         """
         neighbors = self.knn.kneighbors(
-            vector.cpu().numpy().reshape(1, -1), n_neighbors=count, return_distance=False
+            vector.cpu().numpy().reshape(1, -1),
+            n_neighbors=count,
+            return_distance=False,
         )
-        return list(map(lambda emb: self.emb2adj[emb], map(lambda nn: self.tensors[nn], neighbors[0])))
+        return list(
+            map(
+                lambda emb: self.emb2adj[emb],
+                map(lambda nn: self.tensors[nn], neighbors[0]),
+            )
+        )
 
     def has_adj(self, name):
         """Returns True if given adj is known to model otherwise False"""
@@ -107,7 +114,9 @@ class AdjectiveModel:
     def kneighbors(self, adj, k):
         """Get the tensors of the k-nearest neighbors to given Adjective"""
         neighbors = self.knn.kneighbors(
-            adj.embedding.cpu().numpy().reshape(1, -1), n_neighbors=k, return_distance=False
+            adj.embedding.cpu().numpy().reshape(1, -1),
+            n_neighbors=k,
+            return_distance=False,
         )
         return list(map(lambda n: self.tensors[n], neighbors[0]))
 
@@ -145,10 +154,14 @@ def find_gate_vector(adj, model, unsupervised=False):
     Otherwise we prioritize these over nearest neighbors from vector space.
     """
     hyp_count = 0 if unsupervised else len(adj.hyponyms)
-    hyp_emb = [] if unsupervised else list(
-        map(
-            lambda a: model.adj_from_name(a).embedding,
-            filter(model.has_adj, adj.hyponyms),
+    hyp_emb = (
+        []
+        if unsupervised
+        else list(
+            map(
+                lambda a: model.adj_from_name(a).embedding,
+                filter(model.has_adj, adj.hyponyms),
+            )
         )
     )
     filter_hyp_emb = set(hyp_emb) | {adj.embedding}
@@ -223,6 +236,7 @@ def build_adjective_dict(adj2emb):
 
     return word2adj
 
+
 def load_gre_test_set(adj_model):
     """
     Loads and creates a test set of tuples
@@ -242,6 +256,7 @@ def load_gre_test_set(adj_model):
 
         return test_data
 
+
 def load_gre_words():
     """Loads and creates a set of the input words for the GRE test set """
     with open(GRE_INPUT_WORDS, "r") as f:
@@ -252,6 +267,7 @@ def load_lb_words(path=LB_INPUT_WORDS):
     """Returns a list of the LB input words as strings"""
     with open(path, "r") as f:
         return list(map(lambda w: w.strip().lower(), f))
+
 
 def load_gold_standard(adj_model):
     """
@@ -310,7 +326,9 @@ def build_adj_model():
     return AdjectiveModel(adj2adj)
 
 
-def build_dataset(adj_model=None, custom_filter=None, restricted=False, unsupervised=False):
+def build_dataset(
+    adj_model=None, custom_filter=None, restricted=False, unsupervised=False
+):
     """
     Builds an AdjectiveDataset for the given model.
     The model contains all the adjectives, and allows querying
