@@ -28,12 +28,15 @@ def main(model_path, tests):
     model, _optimizer = train.initialize_model(model_path)
     with torch.set_grad_enabled(False):
         for test in tests:
-            if test not in gold_standard:
-                print("'%s' not in gold standard. Skipping" % test)
+            if not adj_model.has_adj(test):
+                print("No embedding for '%s'. Skipping" % test)
                 continue
 
-            print("Antonym predictions for '%s':" % test)
-            gold_antonyms = gold_standard[test]
+            header = "Antonym predictions for '%s'" % test
+            header += ":" if test in gold_standard else " (Not in gold standard):"
+            print(header)
+
+            gold_antonyms = gold_standard[test] if test in gold_standard else []
             ant_pred = predict_antonym_emb(model, adj_model, test)
             predictions = [
                 a.name for a in adj_model.adjs_from_vector(ant_pred, count=5)
