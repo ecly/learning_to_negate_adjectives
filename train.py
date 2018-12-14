@@ -3,10 +3,18 @@ Module for loading/saving/training an adjective negation model.
 
 Requires ~7GB of either CUDA or regular Memory depending
 on the device used for training.
+
+Allows options (output, model, restricted, unsupervised, device).
+
+Examples:
+    python train.py --output adjective_negation_model_restricted.tar --restricted
+    python train.py --model adjective_negation_model_unsupervised.tar --unsupervised
+    python train.py --device cpu
 """
 import time
 import sys
 import os.path
+import argparse
 
 import torch
 import torch.nn as nn
@@ -19,7 +27,7 @@ import data
 RHO = 0.95
 BATCH_SIZE = 48
 EPOCHS = 200
-MODEL_PATH = "adjective_negation_model.tar"
+MODEL_DEFAULT_PATH = "adjective_negation_model.tar"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -87,17 +95,72 @@ def initialize_model(model_path=None, device=DEVICE):
     return model, optimizer
 
 
-def main(model_path=MODEL_PATH, device=DEVICE):
-    """Build dataset and train model"""
+def prepare_arg_parser():
+    """Create arg parser handling input/output and training conditions"""
+    arg_parser = argparse.ArgumentParser(
+        description="Trains an existing or new adjective negation model. "
+        + "If no args are given, the model at %s will be used " % MODEL_DEFAULT_PATH
+        + "if it exists or it will be created if it does not exist. "
+        + "Defaults to standard training conditions."
+        + "Defaults to standard training conditions."
+    )
+    arg_parser.add_argument(
+        "-r",
+        "--restricted",
+        action="store_true",
+        help="train under the 'restricted' condition",
+    )
+    arg_parser.add_argument(
+        "-u",
+        "--unsupervised",
+        action="store_true",
+        help="train under the 'unsupervised' condition",
+    )
+    arg_parser.add_argument(
+        "-o",
+        "--output",
+        nargs=1,
+        metavar="output-path",
+        default=[MODEL_DEFAULT_PATH],
+        help="save the model to the given path on exit",
+    )
+    arg_parser.add_argument(
+        "-m",
+        "--model",
+        nargs=1,
+        metavar="model-path",
+        default=[MODEL_DEFAULT_PATH],
+        help="loads the given model for training if it exists",
+    )
+    arg_parser.add_argument(
+        "-d",
+        "--device",
+        nargs=1,
+        metavar="device",
+        default=["cuda" if torch.cuda.is_available() else "cpu"],
+        help="use the given device (cuda/cpu) for training",
+    )
+    return arg_parser
+
+
+def main():
+    """Build dataset according to args and train model"""
+    args = prepare_arg_parser().parse_args()
+    device = torch.device(args.device[0])
+    restricted = args.restricted
+    unsupervised = args.unsupervised
+    model_path = args.model[0]
+    output_path = args.output[0]
+
     start = time.time()
     print("Building dataset and adjectives")
-    dataset = data.build_dataset(restricted=False)
+    dataset = data.build_dataset(restricted=restricted, unsupervised=unsupervised)
     data_loader = DataLoader(dataset=dataset, batch_size=BATCH_SIZE, shuffle=True)
     print("Built dataset and adjectives in %ds" % (time.time() - start))
     model, optimizer = initialize_model(model_path, device)
 
     try:
-        print("Training on", DEVICE.type.upper())
+        print("Training on", device.type.upper())
         training_loop(model, optimizer, data_loader)
     finally:
         # Always save model. This catches SIGINT kill signal.
@@ -109,15 +172,10 @@ def main(model_path=MODEL_PATH, device=DEVICE):
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
             },
-            MODEL_PATH,
+            output_path,
         )
         torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
-    if len(sys.argv) >= 2:
-        device_type = sys.argv[1].lower()
-        assert sys.argv[1].lower() in ["cpu", "cuda"]
-        DEVICE = torch.device(device_type)
-
-    main(device=DEVICE)
+    main()
