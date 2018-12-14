@@ -1,6 +1,5 @@
 """
-Module for loading/saving/training a adjective negation model.
-Also includes evaluation code.
+Module for loading/saving/training an adjective negation model.
 
 Requires ~7GB of either CUDA or regular Memory depending
 on the device used for training.
@@ -63,8 +62,8 @@ def train(model, optimizer, loss_function, batch):
 def initialize_model(model_path=None, device=DEVICE):
     """
     Initializes a model and an optimizer.
-    If a model_path is given, state_dict for EncoderDecoder
-    model as well as state_dict for optimizer are loaded in.
+    If a model_path is given, state_dicts for the EncoderDecoder
+    model for the optimizer are loaded in.
 
     If the a device is given, model will be moved to the given
     device. Model will always be wrapped in `nn.DataParallel` for
@@ -82,27 +81,29 @@ def initialize_model(model_path=None, device=DEVICE):
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-
-    model.double()  # use doubles since our input is doubles
+    # use doubles since our input tensors use doubles
+    model.double()
     model.to(device)
     return model, optimizer
 
 
-def main(device=DEVICE):
+def main(model_path=MODEL_PATH, device=DEVICE):
     """Build dataset and train model"""
     start = time.time()
     print("Building dataset and adjectives")
     dataset = data.build_dataset(restricted=False)
     data_loader = DataLoader(dataset=dataset, batch_size=BATCH_SIZE, shuffle=True)
     print("Built dataset and adjectives in %ds" % (time.time() - start))
-    model, optimizer = initialize_model(MODEL_PATH, device)
+    model, optimizer = initialize_model(model_path, device)
 
     try:
         print("Training on", DEVICE.type.upper())
         training_loop(model, optimizer, data_loader)
     finally:
-        # Always save model
-        print("Saving model to", MODEL_PATH)
+        # Always save model. This catches SIGINT kill signal.
+        # If stopping a model running in the background use:
+        # kill -s SIGINT <pid>
+        print("Saving model to", model_path)
         torch.save(
             {
                 "model_state_dict": model.state_dict(),
@@ -114,9 +115,9 @@ def main(device=DEVICE):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
+    if len(sys.argv) >= 2:
         device_type = sys.argv[1].lower()
-        assert device_type in ["cpu", "cuda"]
+        assert sys.argv[1].lower() in ["cpu", "cuda"]
         DEVICE = torch.device(device_type)
 
-    main(DEVICE)
+    main(device=DEVICE)

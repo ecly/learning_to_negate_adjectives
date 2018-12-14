@@ -1,13 +1,11 @@
 """
-Logic for building the data using NLTK and the binary of Google's
-300 dimensional word2vec embeddings, trained on Google News data.
+Module for building the datasets for training and evaluation
+using WordNet and the <adjective, embedding> file output by
+the preprocess module.
 
-The pre-trained embeddings can be downloaded here:
-https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
-
-This also included logic for the variations of the model in the
+This also include logic for building the variations of the model in the
 form of `restricted` and `unsupervised`. Both of these are present
-as parameters to `build_dataset`.
+as parameters to `build_dataset` and should be used from the train module.
 """
 from collections import defaultdict
 import torch
@@ -17,18 +15,17 @@ from sklearn.neighbors import NearestNeighbors
 import numpy as np
 
 CENTROID_MIN_BASIS = 10
-ANTONYM_THESAURUS = "./test/thesaurus_antonyms_extended"
-LB_INPUT_WORDS = "./test/lb.inputwords"
-GRE_INPUT_WORDS = "./test/gre_test_adjs_inputwords.txt"
-GRE_TEST_QUESTIONS = "./test/gre_testset_adjs.txt"
-GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
-ADJ2EBM_PATH = "./adj_emb.tsv"
+ANTONYM_THESAURUS = "./data/thesaurus_antonyms_extended"
+LB_INPUT_WORDS = "./data/lb.inputwords"
+GRE_INPUT_WORDS = "./data/gre_test_adjs_inputwords.txt"
+GRE_TEST_QUESTIONS = "./data/gre_testset_adjs.txt"
+ADJ2EBM_PATH = "./data/adjective_embeddings.tsv"
 
 
 class Adjective:
     """
     Class encapsulating an Adjective with its name,
-    embedding, hyponyms and antonyms as per WordNet.
+    embedding, (co)hyponyms and antonyms as per WordNet.
     """
 
     def __init__(self, name, embedding, hyponyms, antonyms):
@@ -47,7 +44,7 @@ class Adjective:
 
 class AdjectiveModel:
     """
-    An Adjective Model encapsulating mappings from
+    An AdjectiveModel encapsulating mappings from
     embeddings to adjectives and names to adjectives.
 
     Also manages querying for k nearest neighbors among
@@ -135,7 +132,6 @@ def calc_centroid(matrix):
 
     Returns: 1D torch tensor.
     """
-
     return torch.mean(matrix, dim=0)
 
 
@@ -168,8 +164,9 @@ def find_gate_vector(adj, model, unsupervised=False):
 
 def build_hyponym_groups():
     """
-    Hyponym groups are recognized by their 'lead'
-    adjective. The one with synset.pos() = 'a'.
+    Hyponym groups are recognized by their 'lead' adjective.
+    The one with synset.pos() = 'a'. All adjectives below an 'a'
+    belong to that 'a's synset until another 'a' is met.
     """
     hyponym_groups = {}
 
@@ -197,7 +194,7 @@ def antonyms_for_synset(synset):
 
 def build_adjective_dict(adj2emb):
     """
-    Build adjective dict using wordnet and the given
+    Build adjective dict using WordNet and the given
     adj2emb dictionary for adjective word embeddings.
     """
     word2adj = {}
@@ -226,27 +223,12 @@ def build_adjective_dict(adj2emb):
 
     return word2adj
 
-
-def load_gre_words():
-    """
-    Loads and creates a set of the input words
-    for the GRE test set.
-    """
-    with open(GRE_INPUT_WORDS, "r") as f:
-        words = set()
-        for word in f:
-            words.add(word.strip().lower())
-
-        return words
-
-
 def load_gre_test_set(adj_model):
     """
     Loads and creates a test set of tuples
     <input, [options], answer> for antonym prediction.
 
-    The given adj_model is used to remove questions
-    where
+    The given adj_model is used to remove questions where
     """
     with open(GRE_TEST_QUESTIONS, "r") as f:
         test_data = []
@@ -260,16 +242,16 @@ def load_gre_test_set(adj_model):
 
         return test_data
 
+def load_gre_words():
+    """Loads and creates a set of the input words for the GRE test set """
+    with open(GRE_INPUT_WORDS, "r") as f:
+        return set(map(lambda w: w.strip().lower(), f))
+
 
 def load_lb_words(path=LB_INPUT_WORDS):
     """Returns a list of the LB input words as strings"""
-    words = []
     with open(path, "r") as f:
-        for word in f:
-            words.append(word.strip().lower())
-
-    return words
-
+        return list(map(lambda w: w.strip().lower(), f))
 
 def load_gold_standard(adj_model):
     """
@@ -297,8 +279,7 @@ def load_gold_standard(adj_model):
 
 def load_adj2emb(path=ADJ2EBM_PATH):
     """
-    Loads the <adj, emb> triples created with preprocess.py
-    into a dictionary.
+    Loads the <adj, emb> pairs created with 'preprocess.py' into a dictionary.
     """
     with open(path, "r") as f:
         adj2emb = {}
@@ -312,10 +293,11 @@ def load_adj2emb(path=ADJ2EBM_PATH):
 
 
 def build_filtered_words(adj_model):
-    """Builds a set of filtered words using GRE and Gold Standard"""
-    gre_filter = load_gre_words()
-    gold_standard = load_gold_standard(adj_model)
-    return gre_filter | set(gold_standard.keys())
+    """
+    Builds a set of filtered words using the Gold Standard
+    which encapsulates both input words from GRE and LB.
+    """
+    return set(load_gold_standard(adj_model).keys())
 
 
 def build_adj_model():
@@ -361,16 +343,6 @@ def build_dataset(adj_model=None, custom_filter=None, restricted=False, unsuperv
         adj_name = adj.name
         if adj.name in filtered:
             continue
-
-        # NOTE: If we should treat hyponyms as having same antonyms
-        # then below code should be integrated here. This was somewhat
-        # unclear in original paper, but this results an amount of
-        # training pairs far beyond that of the paper, hence
-        # this piece of code is commented out by default.
-        #
-        # for adj_name in adj.hyponyms | {adj.name}:
-        #     if adj_name in filtered or not model.has_adj(adj_name):
-        #         continue
 
         current_adj = adj_model.adj_from_name(adj_name)
         adj_emb = current_adj.embedding

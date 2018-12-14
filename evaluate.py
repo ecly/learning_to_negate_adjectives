@@ -15,7 +15,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # In the original paper they say that several of the antonym
 # predictions for P5 should be in the gold standard. According
-# to merriam webster, several is more 2 and less than many, so
+# to Merriam Webster, several is more 2 and less than many, so
 # we will use 3 or more correct predictions as a correct prediction.
 SEVERAL = 3
 
@@ -24,7 +24,7 @@ def compute_cosine(tensor1, tensor2, device=DEVICE):
     """
     Compute cosine similarity between two pytorch tensors
     Returns a regular python float where 1.0 means identical
-    tensors and 0.0 means orthoganal tensors.
+    tensors and 0.0 means orthogonal tensors.
     """
     tensor1 = tensor1.to(device)
     tensor2 = tensor2.to(device)
@@ -46,9 +46,8 @@ def predict_antonym_emb(model, adj_model, adj_str, device=DEVICE):
 
 def evaluate_gre(model, adj_model, device=DEVICE, gre=None):
     """
-    Evaluate the given model according to GRE
-    question set. The given adj_model is needed to compute
-    embeddings for the GRE adjectives.
+    Evaluate the given model according to GRE question set.
+    The given adj_model is needed to compute embeddings for the GRE adjectives.
 
     Optionally takes a loaded GRE dataset to avoid loading
     multiple times, if evaluation is ran repeatedly.
@@ -80,18 +79,18 @@ def evaluate_gre(model, adj_model, device=DEVICE, gre=None):
 def evaluate_gold_standard_p1(input_words, model, adj_model, device=DEVICE, gold=None):
     """
     Evaluate the given model and input_words according to the gold standard.
-    input_words is a list of strings, which are the ones that will
+    `input_words` is a list of strings, which are adjectives that will
     have their antonym predicted to be evaluated against the gold standard.
 
     Here we predict a one best antonym and checks whether it is present in
     the gold standard. If an input word is given that we don't have embeddings
-    for, it it skipped.
+    for, it is skipped.
 
     The given adj_model is needed to compute embeddings for the input_words.
     The model is used for prediction. Optionally takes the gold standard as
     an input to avoid loading it multiple times under some circumstances.
 
-    Returns two lists with right and wrong predictions respectively.
+    Returns two lists of (right, wrong) predictions respectively.
     """
     with torch.set_grad_enabled(False):
         gold = data.load_gold_standard(adj_model) if gold is None else gold
@@ -118,7 +117,7 @@ def evaluate_gold_standard_p5(input_words, model, adj_model, device=DEVICE, gold
     The model is used for prediction. Optionally takes the gold standard as
     an input to avoid loading it multiple times under some circumstances.
 
-    Returns two lists with right and wrong predictions respectively.
+    Returns two lists of (right, wrong) predictions respectively.
     """
     with torch.set_grad_enabled(False):
         gold = data.load_gold_standard(adj_model) if gold is None else gold
@@ -148,7 +147,7 @@ def evaluate_gold_standard_p5(input_words, model, adj_model, device=DEVICE, gold
 def evaluate(model, adj_model, device=DEVICE):
     """
     Evaluates the given model on both GRE 5 option questions
-    and on the gold standard. Results are printed to stdout.
+    and GRE/LB P1/P5 against the Gold Standard. Results are printed to stdout.
     """
     # Experiment 1: GRE Question, 5 Options
     gre_data = data.load_gre_test_set(adj_model)
@@ -190,7 +189,7 @@ def main(model_path, device=DEVICE):
     """
     Loads the adj_model and EncoderDecoder model from a checkpoint.
     The EncoderDecoder model is then evaluated on both GRE question
-    answer set and on the gold standard antonym prediction task.
+    answer set and on GRE/LB P1/P5 gold standard antonym prediction task.
     """
     print("Building dataset and adjectives")
     adj_model = data.build_adj_model()

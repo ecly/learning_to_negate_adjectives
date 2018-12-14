@@ -5,6 +5,10 @@ Optionally takes additional words as command line arguments.
 
 Predictions marked with [] in the output denote that they were present
 in the gold standard antonyms for the given word.
+
+Examples:
+    python test.py adjective_negation_model.tar
+    python test.py adjective_negation_model.tar uneven partial
 """
 import sys
 import torch
@@ -15,7 +19,7 @@ import train
 TESTS = ["ornate", "ruthless"]
 
 def main(model_path, tests):
-    """Run and print tests for `TESTS`-list on given model"""
+    """Run and print tests for given `test`-list on given model"""
     adj_model = data.build_adj_model()
     gold_standard = data.load_gold_standard(adj_model)
     model, _optimizer = train.initialize_model(model_path)

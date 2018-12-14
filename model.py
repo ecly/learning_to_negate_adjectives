@@ -7,8 +7,8 @@ EMBEDDING_SIZE = 300
 class EncoderDecoder(nn.Module):
     """
     Combination of Encoder and Decoder.
-    Produces a predicted antonym y, given and
-    adjective x and a gate vector z.
+    Produces a predicted antonym embedding y, given an
+    adjective embedding x and a gate vector z.
     """
 
     def __init__(self, hidden_size=HIDDEN_SIZE, embedding_size=EMBEDDING_SIZE):

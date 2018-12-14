@@ -3,6 +3,9 @@ Module for preprocessing WordNet/GoogleNews model.
 Creates a TSV-file containing all the adjectives present
 in WordNet alongside their embedding from the GoogleNews
 word2vec model.
+
+The GogleNews word2vec embeddings can be downloaded here:
+https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
 """
 import sys
 import gensim
@@ -10,7 +13,7 @@ from nltk.corpus import wordnet as wn
 import numpy as np
 
 GOOGLE_NEWS_PATH = "./GoogleNews-vectors-negative300.bin"
-DEFAULT_TSV_PATH = "adj_emb.tsv"
+DEFAULT_TSV_PATH = "./data/adjective_embeddings.tsv"
 
 
 def build_adjective_pairs(model):
