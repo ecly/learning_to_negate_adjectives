@@ -3,6 +3,11 @@ Repository replicating the results from the paper [Learning to Negate Adjectives
 
 Thanks to Laura Rimell for supplying the test data for the original experiments.
 
+### Requirements
+`pip3 install -r requirements.txt`  
+`python3 -c "import nltk; nltk.download('wordnet')"`
+
+### Implementation
 Examples for running [preprocess.py](preprocess.py), [train.py](train.py), [evaluate.py](evaluate.py) and [test.py](test.py) are given at the top of the files respectively.
 
 ##### [preprocess.py](preprocess.py)
