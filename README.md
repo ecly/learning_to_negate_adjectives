@@ -3,6 +3,8 @@ Repository replicating the results from the paper [Learning to Negate Adjectives
 
 Thanks to Laura Rimell for supplying the test data for the original experiments.
 
+A pre-trained standard model trained for 175 epochs (200 used in original paper) can be downloaded [here](https://drive.google.com/open?id=193yw5ch1ekp-1o8y75IS9La0ZM2oEm3V).
+
 ### Requirements
 `pip3 install -r requirements.txt`  
 `python3 -c "import nltk; nltk.download('wordnet')"`
