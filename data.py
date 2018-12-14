@@ -25,20 +25,20 @@ ADJ2EBM_PATH = "./data/adjective_embeddings.tsv"
 class Adjective:
     """
     Class encapsulating an Adjective with its name,
-    embedding, (co)hyponyms and antonyms as per WordNet.
+    embedding, cohyponyms and antonyms as per WordNet.
     """
 
-    def __init__(self, name, embedding, hyponyms, antonyms):
+    def __init__(self, name, embedding, cohyponyms, antonyms):
         self.name = name
         self.embedding = embedding
         self.antonyms = antonyms
-        self.hyponyms = hyponyms
+        self.cohyponyms = cohyponyms
 
     def __str__(self):
-        return "Name: %s\nAntonyms: %s\nHyponyms: %s" % (
+        return "Name: %s\nAntonyms: %s\ncohyponyms: %s" % (
             self.name,
             self.antonyms,
-            self.hyponyms,
+            self.cohyponyms,
         )
 
 
@@ -148,19 +148,19 @@ def find_gate_vector(adj, model, unsupervised=False):
     """
     Finds a gate vector for an adjective using the given model.
 
-    If unsupervised=True is given, we ignore hyponyms from WordNet
+    If unsupervised=True is given, we ignore cohyponyms from WordNet
     and instead only use nearest neighbors to create the gate vector.
 
     Otherwise we prioritize these over nearest neighbors from vector space.
     """
-    hyp_count = 0 if unsupervised else len(adj.hyponyms)
+    hyp_count = 0 if unsupervised else len(adj.cohyponyms)
     hyp_emb = (
         []
         if unsupervised
         else list(
             map(
                 lambda a: model.adj_from_name(a).embedding,
-                filter(model.has_adj, adj.hyponyms),
+                filter(model.has_adj, adj.cohyponyms),
             )
         )
     )
@@ -175,24 +175,24 @@ def find_gate_vector(adj, model, unsupervised=False):
     return calc_centroid(torch.stack(hyp_emb))
 
 
-def build_hyponym_groups():
+def build_cohyponym_groups():
     """
-    Hyponym groups are recognized by their 'lead' adjective.
+    cohyponym groups are recognized by their 'lead' adjective.
     The one with synset.pos() = 'a'. All adjectives below an 'a'
     belong to that 'a's synset until another 'a' is met.
     """
-    hyponym_groups = {}
+    cohyponym_groups = {}
 
-    current_hyponyms = set()
+    current_cohyponyms = set()
     for synset in wn.all_synsets(wn.ADJ):
         if synset.pos() == "a":
-            current_hyponyms = set()
-            hyponym_groups[synset.name()] = current_hyponyms
+            current_cohyponyms = set()
+            cohyponym_groups[synset.name()] = current_cohyponyms
 
         for word in synset.lemmas():
-            current_hyponyms.add(word.name())
+            current_cohyponyms.add(word.name())
 
-    return hyponym_groups
+    return cohyponym_groups
 
 
 def antonyms_for_synset(synset):
@@ -211,13 +211,13 @@ def build_adjective_dict(adj2emb):
     adj2emb dictionary for adjective word embeddings.
     """
     word2adj = {}
-    hyponym_groups = build_hyponym_groups()
+    cohyponym_groups = build_cohyponym_groups()
 
-    current_hyponyms = set()
+    current_cohyponyms = set()
     current_antonyms = set()
     for synset in wn.all_synsets(wn.ADJ):
         if synset.pos() == "a":
-            current_hyponyms = hyponym_groups[synset.name()]
+            current_cohyponyms = cohyponym_groups[synset.name()]
             current_antonyms = antonyms_for_synset(synset)
 
         for word in synset.lemmas():
@@ -232,7 +232,7 @@ def build_adjective_dict(adj2emb):
 
             adj = word2adj[word_name]
             adj.antonyms = adj.antonyms | current_antonyms
-            adj.hyponyms = adj.hyponyms | current_hyponyms
+            adj.cohyponyms = adj.cohyponyms | current_cohyponyms
 
     return word2adj
 
@@ -319,7 +319,7 @@ def build_filtered_words(adj_model):
 def build_adj_model():
     """
     Builds the AdjectiveModel using embeddings at `ADJ2EMB_PATH`
-    as well as adjective/antonyms/hyponyms found from WordNet.
+    as well as adjective/antonyms/cohyponyms found from WordNet.
     """
     adj2emb = load_adj2emb(ADJ2EBM_PATH)
     adj2adj = build_adjective_dict(adj2emb)
@@ -339,10 +339,10 @@ def build_dataset(
     enumerable. If no custom_filter is used, the default combination
     of words from GRE questions and Gold standard input words are used.
 
-    Option `restricted` represents whether hyponyms for a word in filtered
+    Option `restricted` represents whether cohyponyms for a word in filtered
     should be filtered as well.
 
-    Option `unsupervised` indicates whether WordNet hyponyms should be included
+    Option `unsupervised` indicates whether WordNet cohyponyms should be included
     when calculating the gate vector.
     """
     adj_model = build_adj_model() if adj_model is None else adj_model
@@ -354,7 +354,7 @@ def build_dataset(
         for f in filtered:
             if adj_model.has_adj(f):
                 filter_adj = adj_model.adj_from_name(f)
-                filtered = filtered | filter_adj.hyponyms
+                filtered = filtered | filter_adj.cohyponyms
 
     triples = []
     for adj in adj_model.adj2adj.values():

@@ -16,7 +16,7 @@ Examples for running [preprocess.py](preprocess.py), [train.py](train.py), [eval
 Produces [adjective_embeddings.txt](data/adjective_embeddings.tsv) using GoogleNews 300 dimensional word2vec embeddings.
 
 ##### [data.py](data.py)
-Logic for parsing WordNet, test data and for building the various variations of the training data ['*standard*', '*restricted*', '*unsupervised*']. Also contains the `AdjectiveModel` which is the wrapping structure for keeping track of adjective's antonyms/hyponyms as well as querying for k-nearest-neighbors.
+Logic for parsing WordNet, test data and for building the various variations of the training data ['*standard*', '*restricted*', '*unsupervised*']. Also contains the `AdjectiveModel` which is the wrapping structure for keeping track of adjective's antonyms/cohyponyms as well as querying for k-nearest-neighbors.
 
 ##### [model.py](model.py)
 Implementation of PyTorch modules for Encoder, Decoder and their wrapper EncoderDecoder.
