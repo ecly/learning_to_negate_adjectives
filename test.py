@@ -1,7 +1,8 @@
 """
 Small script for illustrating some test examples ran on a given model.
 
-Optionally takes additional words as command line arguments.
+Optionally takes adjectives as command line arguments, in which case these
+are used instead of the `TESTS` list.
 
 Predictions marked with [] in the output denote that they were present
 in the gold standard antonyms for the given word.
@@ -11,6 +12,7 @@ Examples:
     python test.py adjective_negation_model.tar uneven partial
 """
 import sys
+import os
 import torch
 import data
 from evaluate import predict_antonym_emb
@@ -29,7 +31,7 @@ def main(model_path, tests):
                 print("%s not in gold standard. Skipping" % test)
                 continue
 
-            print("Predictions for %s:" % test)
+            print("Antonym predictions for %s:" % test)
             gold_antonyms = gold_standard[test]
             ant_pred = predict_antonym_emb(model, adj_model, test)
             predictions = [a.name for a in adj_model.adjs_from_vector(ant_pred, count=5)]
@@ -47,4 +49,5 @@ if __name__ == '__main__':
         print("Expected model path as command line argument")
         sys.exit(1)
 
-    main(sys.argv[1], TESTS + [test.lower() for test in sys.argv[2:]])
+    assert os.path.isfile(sys.argv[1])
+    main(sys.argv[1], [test.lower() for test in sys.argv[2:]])
