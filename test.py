@@ -18,7 +18,7 @@ import data
 from evaluate import predict_antonym_emb
 import train
 
-TESTS = ["ornate", "ruthless"]
+TESTS = ["ornate", "ruthless", "authentic", "inconsolable"]
 
 
 def main(model_path, tests):
