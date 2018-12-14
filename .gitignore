@@ -1,5 +1,5 @@
 GoogleNews-vectors-negative300.bin
-adjective_negation_model.tar
+*.tar
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
