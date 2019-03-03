@@ -1,5 +1,5 @@
 # Learning to Negate Adjectives with Bilinear Models
-Repository replicating the results from the paper [Learning to Negate Adjectives with Bilinear Models](https://aclweb.org/anthology/E17-201://aclweb.org/anthology/E17-2012) (2017) by Laura Rimell, Amandla Mabona, Luana Bulat and Douwe Kiela.
+Repository replicating the results from the paper [Learning to Negate Adjectives with Bilinear Models](https://www.aclweb.org/anthology/E/E17/E17-2012.pdf) (2017) by Laura Rimell, Amandla Mabona, Luana Bulat and Douwe Kiela.
 
 Thanks to Laura Rimell for supplying the test data for the original experiments.
 
